@@ -15,7 +15,7 @@ class Storekeeper(models.Model):
     )
     
     class Meta:
-        db_table = 'Storekeeper'
+        db_table = 'storekeeper'
         verbose_name = 'Кладовщик'
         verbose_name_plural = 'Кладовщики'
     

@@ -25,7 +25,7 @@ class Prices(models.Model):
     )
     
     class Meta:
-        db_table = 'Prices'
+        db_table = 'prices'
         verbose_name = 'Цена'
         verbose_name_plural = 'Цены'
     

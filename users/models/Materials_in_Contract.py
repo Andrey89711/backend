@@ -25,7 +25,7 @@ class MaterialsInContract(models.Model):
     )
     
     class Meta:
-        db_table = 'Materials_in_Contract'
+        db_table = 'materials_in_contract'
         verbose_name = 'Материал в договоре'
         verbose_name_plural = 'Материалы в договоре'
         unique_together = [['id_materials', 'id_contract']]

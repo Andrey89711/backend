@@ -13,7 +13,7 @@ class ActOfArrival(models.Model):
     )
     
     class Meta:
-        db_table = 'Act_of_arrival'
+        db_table = 'act_of_arrival'
         verbose_name = 'Акт прибытия'
         verbose_name_plural = 'Акты прибытия'
     

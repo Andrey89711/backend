@@ -15,7 +15,7 @@ class Warehouse(models.Model):
     )
     
     class Meta:
-        db_table = 'Warehouse'
+        db_table = 'warehouse'
         verbose_name = 'Склад'
         verbose_name_plural = 'Склады'
     

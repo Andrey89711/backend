@@ -15,7 +15,7 @@ class AcceptanceOfDelivery(models.Model):
     )
     
     class Meta:
-        db_table = 'Acceptance_of_delivery'
+        db_table = 'acceptance_of_delivery'
         verbose_name = 'Приемка поставки'
         verbose_name_plural = 'Приемки поставок'
         unique_together = [['id_storekeeper', 'id_act_of_arrival']]

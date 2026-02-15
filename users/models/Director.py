@@ -15,7 +15,7 @@ class Director(models.Model):
     )
     
     class Meta:
-        db_table = 'Director'
+        db_table = 'director'
         verbose_name = 'Директор'
         verbose_name_plural = 'Директора'
     

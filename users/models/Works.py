@@ -15,7 +15,7 @@ class Works(models.Model):
     )
     
     class Meta:
-        db_table = 'Works'
+        db_table = 'works'
         verbose_name = 'Работает'
         verbose_name_plural = 'Работают'
         unique_together = [['id_storekeeper', 'id_warehouse']]

@@ -15,7 +15,7 @@ class Accountant(models.Model):
     )
     
     class Meta:
-        db_table = '_Accountant'
+        db_table = 'accountant'
         verbose_name = 'Бухгалтер'
         verbose_name_plural = 'Бухгалтеры'
     

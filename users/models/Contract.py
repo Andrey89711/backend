@@ -7,7 +7,7 @@ class Contract(models.Model):
     )
     
     class Meta:
-        db_table = 'Contract'
+        db_table = 'contract'
         verbose_name = 'Договор'
         verbose_name_plural = 'Договоры'
     

@@ -19,7 +19,7 @@ class Materials(models.Model):
     )
     
     class Meta:
-        db_table = 'Materials'
+        db_table = 'materials'
         verbose_name = 'Материал'
         verbose_name_plural = 'Материалы'
     

@@ -18,10 +18,9 @@ class Inventory(models.Model):
     )
     
     class Meta:
-        db_table = 'Inventory'
+        db_table = 'inventory'
         verbose_name = 'Запас'
         verbose_name_plural = 'Запасы'
-        # Составной первичный ключ
         unique_together = [['id_warehouse', 'id_materials']]
     
     def __str__(self):

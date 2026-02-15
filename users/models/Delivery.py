@@ -31,7 +31,7 @@ class Delivery(models.Model):
     )
     
     class Meta:
-        db_table = 'Delivery'
+        db_table = 'delivery'
         verbose_name = 'Поставка'
         verbose_name_plural = 'Поставки'
     

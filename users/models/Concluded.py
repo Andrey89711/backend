@@ -43,7 +43,7 @@ class Concluded(models.Model):
     )
     
     class Meta:
-        db_table = 'Concluded'
+        db_table = 'concluded'
         verbose_name = 'Заключенный договор'
         verbose_name_plural = 'Заключенные договоры'
     
