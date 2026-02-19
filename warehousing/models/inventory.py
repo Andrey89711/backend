@@ -1,4 +1,4 @@
-from django.db import models
+﻿from django.db import models
 
 class Inventory(models.Model):
     quantity = models.FloatField(
@@ -11,7 +11,7 @@ class Inventory(models.Model):
         verbose_name='Склад'
     )
     id_materials = models.ForeignKey(
-        'Materials',
+        'catalog.Materials',
         on_delete=models.CASCADE,
         db_column='id_materials',
         verbose_name='Материал'

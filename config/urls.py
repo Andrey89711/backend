@@ -7,6 +7,12 @@ urlpatterns = [
     
     # JWT Auth endpoints
     path('api/auth/', include('users.urls')),
+    path('api/personnel/', include('personnel.urls')),
+    path('api/partners/', include('partners.urls')),
+    path('api/catalog/', include('catalog.urls')),
+    path('api/warehousing/', include('warehousing.urls')),
+    path('api/contracts/', include('contracts.urls')),
+    path('api/deliveries/', include('deliveries.urls')),
     
     # API Documentation
     path('api/schema/', SpectacularAPIView.as_view(), name='schema'),

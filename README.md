@@ -1,160 +1,137 @@
-# Backend - Система управления складом
+# Backend - система управления складом
 
-**Django + DRF + JWT + MySQL** - Бэкенд часть системы управления складом (аутентификация).
-TEST
----
+Backend-часть проекта на Django/DRF с JWT-аутентификацией и MySQL.
 
-## Содержание
+## Стек
 
-- [Описание проекта](#)
-- [Технологии](#)
-- [Требования к системе](#)
-- [Быстрый старт](#)
-- [Структура проекта](#)
-- [API Документация](#)
-- [Развертывание](#)
+- Python 3.10+
+- Django 6
+- Django REST Framework
+- Simple JWT
+- MySQL
+- drf-spectacular (Swagger/OpenAPI)
+- django-cors-headers
 
----
+## Архитектура приложений
 
-## Описание проекта
+Проект разделен по бизнес-доменам:
 
-Система управления складом с модулями:
-- 📦 Управление складами и остатками
-- 📝 Управление материалами и поставщиками
-- 📊 Отслеживание поставок и договоров
-- 👥 Управление персоналом
-- 🔐 Аутентификация через JWT
-
----
-
-## Технологии
-
-| Технология | Версия | Назначение |
-|------------|--------|------------|
-| **Python** | 3.10+ | Язык программирования |
-| **Django** | 5.0+ | Web-фреймворк |
-| **Django REST Framework** | 3.14+ | API фреймворк |
-| **djangorestframework-simplejwt** | 5.3+ | JWT аутентификация |
-| **MySQL** | 8.0+ | База данных |
-| **drf-spectacular** | 0.26+ | Авто-документация API |
-| **django-cors-headers** | 4.3+ | CORS поддержка |
-
----
-
-## Требования к системе
-
-### Минимальные требования
-- **ОС**: Windows 10/11, Linux, macOS
-- **Python**: 3.10 или выше
-- **MySQL**: 8.0 или выше
-- **RAM**: 2 ГБ
-- **Дисковое пространство**: 500 МБ
-
-### Рекомендуемые требования
-- **RAM**: 4 ГБ
-- **Дисковое пространство**: 1 ГБ
-- **MySQL**: 8.0+ с поддержкой UTF8MB4
-
----
+- `users` - auth (регистрация, логин, refresh, logout, профиль)
+- `personnel` - сотрудники (бухгалтер, директор, менеджер, кладовщик)
+- `partners` - поставщики
+- `catalog` - материалы и цены
+- `warehousing` - склады, остатки, привязка кладовщиков к складам
+- `contracts` - договоры и состав материалов в договорах
+- `deliveries` - поставки, акты прибытия, приемка поставки
 
 ## Быстрый старт
 
-### 1. Клонирование репозитория
+1. Перейти в корень проекта:
 
 ```bash
-git clone <repository-url>
 cd backend
 ```
 
-### 2. Создание виртуального окружения
-#### Windows:
+2. Создать и активировать виртуальное окружение:
+
 ```bash
-python -m venv venv
-venv\Scripts\activate
+python -m venv .venv
+.venv\Scripts\activate
 ```
 
-#### Linux/Mac:
-```bash
-python3 -m venv venv
-source venv/bin/activate
-```
+3. Установить зависимости:
 
-### 3. Установка зависимостей
 ```bash
 pip install -r requirements.txt
 ```
 
-### 4. Настройка переменных окружения
-Создайте файл .env в корне проекта:
+4. Создать файл `backend/.env`:
 
-```bash
-# Django Settings
-SECRET_KEY=your-secret-key-here-change-in-production
+```env
+SECRET_KEY=django-insecure-change-me
 DEBUG=True
-ALLOWED_HOSTS=localhost,127.0.0.1
 
-# Database Settings
-DB_NAME=warehouse_db
+DB_ENGINE=django.db.backends.mysql
+DB_NAME=core
 DB_USER=root
-DB_PASSWORD=your_mysql_password
+DB_PASSWORD=root
 DB_HOST=localhost
 DB_PORT=3306
 ```
 
-### 5. Создание базы данных MySQL
-```bash
--- Подключение к MySQL
-mysql -u root -p
+5. Создать БД в MySQL (если еще не создана):
 
--- Создание базы данных
-CREATE DATABASE warehouse_db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-
--- Проверка
-SHOW DATABASES;
+```sql
+CREATE DATABASE core CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 ```
 
-### 6. Применение миграций
+6. Выполнить миграции:
+
 ```bash
 python manage.py makemigrations
 python manage.py migrate
 ```
 
-### 7. Создание суперпользователя
+7. (Опционально) создать суперпользователя:
+
 ```bash
 python manage.py createsuperuser
 ```
 
-### 8. Запуск
+8. Запустить сервер:
+
 ```bash
 python manage.py runserver
 ```
 
-## Структура проекта
+## Сидирование тестовых данных
+
+Из корня `backend`:
+
 ```bash
-backend/
-├── config/
-│   ├── __init__.py
-│   ├── settings.py
-│   ├── urls.py
-│   └── wsgi.py
-├── users/
-│   ├── __init__.py
-│   ├── admin.py
-│   ├── apps.py
-│   ├── models.py
-│   ├── serializers.py
-│   ├── urls.py
-│   └── views.py
-├── .env
-├── .gitignore
-├── manage.py
-├── requirements.txt
-└── README.md
+python data_set.py
 ```
 
-### Авто-документация
-##### После запуска сервера доступна документация:
+## API
+
+- Swagger UI: `http://127.0.0.1:8000/api/docs/`
+- OpenAPI schema: `http://127.0.0.1:8000/api/schema/`
+
+Основные префиксы:
+
+- `api/auth/`
+- `api/personnel/`
+- `api/partners/`
+- `api/catalog/`
+- `api/warehousing/`
+- `api/contracts/`
+- `api/deliveries/`
+
+## Важно по миграциям
+
+Если используется старая база, где уже есть таблицы доменных моделей из прежнего `users`, возможны конфликты вида `Table ... already exists`.  
+В таком случае применяйте старые миграции `users` как `fake`:
+
 ```bash
-Swagger UI: http://localhost:8000/api/docs/
-ReDoc: http://localhost:8000/api/schema/
+python manage.py migrate users 0001 --fake
+python manage.py migrate users 0002 --fake
+python manage.py migrate
+```
+
+## Актуальная структура (сокращенно)
+
+```text
+backend/
+  config/
+  users/
+  personnel/
+  partners/
+  catalog/
+  warehousing/
+  contracts/
+  deliveries/
+  manage.py
+  data_set.py
+  requirements.txt
+  README.md
 ```

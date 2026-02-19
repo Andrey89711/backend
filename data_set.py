@@ -7,12 +7,13 @@ django.setup()
 
 from django.db import transaction
 
-from users.models import (
-    Accountant, Director, Manager, Storekeeper, Warehouse, Supplier,
-    Materials, Contract, ActOfArrival, Delivery, Prices, Inventory,
-    Works, AcceptanceOfDelivery, Concluded, MaterialsInContract
-)
-from users.models_types.Delivery_status import DeliveryStatus
+from personnel.models import Accountant, Director, Manager, Storekeeper
+from warehousing.models import Warehouse, Inventory, Works
+from partners.models import Supplier
+from catalog.models import Materials, Prices
+from contracts.models import Contract, Concluded, MaterialsInContract
+from deliveries.models import ActOfArrival, Delivery, AcceptanceOfDelivery
+from deliveries.choices import DeliveryStatus
 
 
 @transaction.atomic

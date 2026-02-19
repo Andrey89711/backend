@@ -1,5 +1,5 @@
-from django.db import models
-from ..models_types.Delivery_status import DeliveryStatus
+﻿from django.db import models
+from ..choices import DeliveryStatus
 class ActOfArrival(models.Model):
     
     id_act_of_arrival = models.AutoField(

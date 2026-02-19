@@ -1,4 +1,4 @@
-from django.db import models
+﻿from django.db import models
 
 class Prices(models.Model):
     id_prices = models.AutoField(
@@ -18,7 +18,7 @@ class Prices(models.Model):
         verbose_name='Материал'
     )
     id_supplier = models.ForeignKey(
-        'Supplier',
+        'partners.Supplier',
         on_delete=models.CASCADE,
         db_column='id_supplier',
         verbose_name='Поставщик'

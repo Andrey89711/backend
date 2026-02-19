@@ -1,4 +1,4 @@
-from django.db import models
+﻿from django.db import models
 
 class MaterialsInContract(models.Model):
     materials_quality_in_contract = models.FloatField(
@@ -12,7 +12,7 @@ class MaterialsInContract(models.Model):
         verbose_name='Фактическое количество'
     )
     id_materials = models.ForeignKey(
-        'Materials',
+        'catalog.Materials',
         on_delete=models.CASCADE,
         db_column='id_materials',
         verbose_name='Материал'

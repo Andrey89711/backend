@@ -24,6 +24,12 @@ INSTALLED_APPS = [
     'drf_spectacular',
 
     'users',
+    'personnel',
+    'partners',
+    'catalog',
+    'warehousing',
+    'contracts',
+    'deliveries',
     'corsheaders',
 
 ]

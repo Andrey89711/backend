@@ -1,4 +1,4 @@
-from django.db import models
+﻿from django.db import models
 
 class Concluded(models.Model):
     conclusion_dates = models.DateField(
@@ -11,7 +11,7 @@ class Concluded(models.Model):
         verbose_name='Стоимость'
     )
     id_supplier = models.ForeignKey(
-        'Supplier',
+        'partners.Supplier',
         on_delete=models.CASCADE,
         db_column='id_supplier',
         verbose_name='Поставщик'
@@ -24,19 +24,19 @@ class Concluded(models.Model):
         verbose_name='Договор'
     )
     id_accountant = models.ForeignKey(
-        'Accountant',
+        'personnel.Accountant',
         on_delete=models.CASCADE,
         db_column='id_accountant',
         verbose_name='Бухгалтер'
     )
     id_manager = models.ForeignKey(
-        'Manager',
+        'personnel.Manager',
         on_delete=models.CASCADE,
         db_column='id_manager',
         verbose_name='Менеджер'
     )
     id_director = models.ForeignKey(
-        'Director',
+        'personnel.Director',
         on_delete=models.CASCADE,
         db_column='id_director',
         verbose_name='Директор'
@@ -49,3 +49,6 @@ class Concluded(models.Model):
     
     def __str__(self):
         return f"Договор #{self.id_contract_id}"
+
+
+

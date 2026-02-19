@@ -1,8 +1,8 @@
-from django.db import models
+﻿from django.db import models
 
 class AcceptanceOfDelivery(models.Model):
     id_storekeeper = models.ForeignKey(
-        'Storekeeper',
+        'personnel.Storekeeper',
         on_delete=models.CASCADE,
         db_column='id_storekeeper',
         verbose_name='Кладовщик'
