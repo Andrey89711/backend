@@ -31,4 +31,4 @@ class MaterialsInContract(models.Model):
         unique_together = [['id_materials', 'id_contract']]
     
     def __str__(self):
-        return f"Материал {self.id_materials_id} в договоре #{self.id_contract_id}"
+        return f"Материал {self.id_materials} в договоре #{self.id_contract}"
