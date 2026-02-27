@@ -1,3 +1,9 @@
-from django.urls import path
+from rest_framework.routers import DefaultRouter
+from .views import WarehouseViewSet, WorksViewSet, InventoryViewSet
 
-urlpatterns = []
+router = DefaultRouter()
+router.register(r'warehouses', WarehouseViewSet, basename='warehouse')
+router.register(r'works', WorksViewSet, basename='works')
+router.register(r'inventory', InventoryViewSet, basename='inventory')
+
+urlpatterns = router.urls
