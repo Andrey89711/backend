@@ -135,3 +135,22 @@ backend/
   requirements.txt
   README.md
 ```
+
+## DOCX to PDF converter
+
+From `backend` directory:
+
+```bash
+$env:Path += ";C:\Program Files\LibreOffice\program"
+```
+
+```bash
+pip install -r requirements.txt
+python docx_to_pdf.py input.docx
+python docx_to_pdf.py input.docx -o output.pdf
+```
+
+Notes:
+
+- Primary method: `docx2pdf` (requires Microsoft Word on Windows).
+- Fallback method: LibreOffice (`soffice` in PATH).
