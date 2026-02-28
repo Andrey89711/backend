@@ -12,7 +12,6 @@ class WarehouseSerializer(serializers.ModelSerializer):
         read_only_fields = ['id_warehouse']
 
 class WorksSerializer(serializers.ModelSerializer):
-    # Добавляем текстовые представления для связей (для отображения в таблице)
     storekeeper_name = serializers.ReadOnlyField(source='id_storekeeper.full_name')
     warehouse_name = serializers.ReadOnlyField(source='id_warehouse.name')
 
@@ -22,7 +21,7 @@ class WorksSerializer(serializers.ModelSerializer):
 
 class InventorySerializer(serializers.ModelSerializer):
     warehouse_name = serializers.ReadOnlyField(source='id_warehouse.name')
-    material_name = serializers.ReadOnlyField(source='id_materials.name') # Предположим, у материала есть поле name
+    material_name = serializers.ReadOnlyField(source='id_materials.name')
 
     class Meta:
         model = Inventory
