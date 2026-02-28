@@ -7,7 +7,7 @@ from ...models import Works, Warehouse, Inventory
 from .serializers import WarehouseSerializer, WorksSerializer, InventorySerializer
 
 class WarehouseViewSet(viewsets.ModelViewSet):
-    queryset = Warehouse.objects.all()
+    queryset = Warehouse.objects.all().distinct()
     serializer_class = WarehouseSerializer
     filter_backends = [filters.SearchFilter]
     search_fields = ['name', 'address']
@@ -25,7 +25,6 @@ class WorksViewSet(viewsets.ModelViewSet):
         return qs
 
 class InventoryViewSet(viewsets.ModelViewSet):
-    queryset = Inventory.objects.all()
     serializer_class = InventorySerializer
     
     def get_queryset(self):
@@ -33,4 +32,4 @@ class InventoryViewSet(viewsets.ModelViewSet):
         warehouse_id = self.request.query_params.get('warehouse_id')
         if warehouse_id:
             qs = qs.filter(id_warehouse=warehouse_id)
-        return qs
+        return qs.distinct()
