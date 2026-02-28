@@ -1,3 +1,8 @@
-from django.urls import path
+from rest_framework.routers import DefaultRouter
+from .views import MaterialsViewSet, PricesViewSet
 
-urlpatterns = []
+router = DefaultRouter()
+router.register(r'materials', MaterialsViewSet, basename='material')
+router.register(r'prices', PricesViewSet, basename='price')
+
+urlpatterns = router.urls
