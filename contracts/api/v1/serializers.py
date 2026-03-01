@@ -15,24 +15,18 @@ class MaterialsInContractSerializer(serializers.ModelSerializer):
         ]
 
 class ConcludedSerializer(serializers.ModelSerializer):
-    """
-    Основной сериализатор для заключенных договоров.
-    Включает информацию о контрагентах и сотрудниках.
-    """
-    # Читаемые поля для отображения имен связанных объектов
+    """Основной сериализатор для заключенных договоров."""
     supplier_name = serializers.ReadOnlyField(source='id_supplier.name')
     accountant_name = serializers.ReadOnlyField(source='id_accountant.full_name')
     manager_name = serializers.ReadOnlyField(source='id_manager.full_name')
     director_name = serializers.ReadOnlyField(source='id_director.full_name')
     
-    # Вложенный список материалов
     materials = MaterialsInContractSerializer(
         source='id_contract.materialsincontract_set', 
         many=True, 
         read_only=True
     )
 
-    # Пример вычисляемого поля (если нужно дублировать или форматировать стоимость)
     cost_formatted = serializers.SerializerMethodField()
 
     class Meta:
@@ -45,7 +39,7 @@ class ConcludedSerializer(serializers.ModelSerializer):
             'id_director', 'director_name',
             'materials'
         ]
-        read_only_fields = ['id_contract'] # ID создается через связь с Contract
+        read_only_fields = ['id_contract']
 
     def get_cost_formatted(self, obj):
         return f"{obj.cost:,.2f} ₽"

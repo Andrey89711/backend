@@ -9,10 +9,7 @@ from ...models import Concluded, Contract, MaterialsInContract
 from .serializers import ConcludedSerializer, ContractSerializer, MaterialsInContractSerializer
 
 class ConcludedViewSet(viewsets.ModelViewSet):
-    """
-    ViewSet для управления заключенными договорами.
-    URL: /api/contracts/concluded/
-    """
+    """Заключенные договоры"""
     queryset = Concluded.objects.all().select_related(
         'id_supplier', 
         'id_accountant', 
@@ -25,25 +22,16 @@ class ConcludedViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['get'])
     def statistics(self, request):
-        """
-        Сводная статистика по договорам.
-        URL: /api/contracts/concluded/statistics/
-        """
+        """Сводная статистика по договорам"""
         today = timezone.now().date()
         month_ago = today - timedelta(days=30)
-
-        # Всего договоров
         total_count = self.queryset.count()
-        
-        # Общая сумма заключенных договоров
         total_cost = self.queryset.aggregate(total=Sum('cost'))['total'] or 0
 
-        # Договоры, заключенные за последний месяц
         recent_count = self.queryset.filter(
             conclusion_dates__gte=month_ago
         ).count()
 
-        # Договоры с просроченной оплатой (если дата оплаты прошла, а статус не закрыт - логика примерная)
         overdue_payment = self.queryset.filter(
             payment_date__lt=today
         ).count()
@@ -57,11 +45,7 @@ class ConcludedViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['get'])
     def by_manager(self, request):
-        """
-        Группировка договоров по менеджерам.
-        URL: /api/contracts/concluded/by_manager/
-        """
-        # Используем values для группировки
+        """Группировка договоров по менеджерам"""
         data = self.queryset.values(
             'id_manager__full_name', 
             'id_manager__id'
@@ -70,7 +54,6 @@ class ConcludedViewSet(viewsets.ModelViewSet):
             total_cost=Sum('cost')
         )
         
-        # Форматируем ответ для удобства
         result = [
             {
                 "manager_id": item['id_manager__id'],
@@ -83,19 +66,13 @@ class ConcludedViewSet(viewsets.ModelViewSet):
         return Response(result)
 
 class ContractViewSet(viewsets.ModelViewSet):
-    """
-    ViewSet для базовой модели Contract.
-    URL: /api/contracts/
-    """
+    """База контракта"""
     queryset = Contract.objects.all()
     serializer_class = ContractSerializer
 
     @action(detail=True, methods=['get'])
     def materials_summary(self, request, pk=None):
-        """
-        Краткая сводка по материалам конкретного договора.
-        URL: /api/contracts/{id}/materials_summary/
-        """
+        """Краткая сводка по материалам конкретного договора."""
         contract = self.get_object()
         materials_qs = MaterialsInContract.objects.filter(id_contract=contract)
         serializer = MaterialsInContractSerializer(materials_qs, many=True)
@@ -110,19 +87,13 @@ class ContractViewSet(viewsets.ModelViewSet):
         })
 
 class MaterialsInContractViewSet(viewsets.ModelViewSet):
-    """
-    ViewSet для управления материалами внутри договоров.
-    URL: /api/contracts/materials/
-    """
+    """Материалы в договоре"""
     queryset = MaterialsInContract.objects.all().select_related('id_materials', 'id_contract')
     serializer_class = MaterialsInContractSerializer
 
     @action(detail=False, methods=['get'])
     def by_contract(self, request):
-        """
-        Фильтрация материалов по ID договора.
-        URL: /api/contracts/materials/by_contract/?contract_id=1
-        """
+        """Фильтрация материалов по ID договора."""
         contract_id = request.query_params.get('contract_id')
         if not contract_id:
             return Response({"error": "Параметр contract_id обязателен"}, status=status.HTTP_400_BAD_REQUEST)
