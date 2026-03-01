@@ -5,7 +5,7 @@ from django.utils import timezone
 from datetime import timedelta
 from deliveries.models import AcceptanceOfDelivery, ActOfArrival, Delivery
 from .serializers import DeliverySerializer, ActOfArrivalSerializer, AcceptanceOfDeliverySerializer
-
+from ...choices import DeliveryStatus
 class DeliveryViewSet(viewsets.ModelViewSet):
     queryset = Delivery.objects.all().select_related('id_contract', 'id_act_of_arrival')
     serializer_class = DeliverySerializer
@@ -18,10 +18,13 @@ class DeliveryViewSet(viewsets.ModelViewSet):
         """
         today = timezone.now().date()
         
-        # 1. Поставки, которые задерживаются более чем на 3 дня (статус 'В пути' или 'Не доставлено')
+        
         three_days_ago = today - timedelta(days=3)
         overdue = Delivery.objects.filter(
-            status__in=['Не доставлено'], # Добавить статус задерживаеться  
+            status__in=[
+                DeliveryStatus.IN_TRANSIT, 
+                DeliveryStatus.PENDING, 
+                DeliveryStatus.DELAYED], 
             delivery_date__lt=three_days_ago
         )
         
@@ -32,21 +35,27 @@ class DeliveryViewSet(viewsets.ModelViewSet):
         return Response({
             "overdue_count": overdue.count(),
             "unaccepted_acts_count": unaccepted.count(),
-            "date": today
+            "status_summary": {
+                "in_transit": DeliveryStatus.IN_TRANSIT.label,
+                "pending": DeliveryStatus.PENDING.label
+            }
         })
 
     @action(detail=False, methods=['get'])
     def pending_today(self, request):
         """Поставки, ожидаемые сегодня со статусом 'Не доставлено'"""
         today = timezone.now().date()
-        qs = self.queryset.filter(delivery_date=today, status='Не доставлено') # Добавить и поменять статус на ожидаеться 
+        qs = self.queryset.filter(
+            delivery_date=today, 
+            status__in=[DeliveryStatus.PENDING, DeliveryStatus.IN_TRANSIT, DeliveryStatus.NOT_DELIVERED]
+            ) # Добавить и поменять статус на ожидаеться 
         return Response(self.get_serializer(qs, many=True).data)
 
     @action(detail=True, methods=['post'])
     def set_arrived(self, request, pk=None):
         """Быстрый перевод конкретной поставки в статус 'Доставлено'"""
         delivery = self.get_object()
-        delivery.status = 'Доставлено'
+        delivery.status = DeliveryStatus.DELIVERED
         delivery.save()
         return Response({'status': f'Поставка #{pk} отмечена как доставленная'})
 
