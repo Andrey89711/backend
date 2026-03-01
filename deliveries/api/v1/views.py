@@ -18,7 +18,7 @@ class DeliveryViewSet(viewsets.ModelViewSet):
         """
         today = timezone.now().date()
         
-        # 1. Поставки, которые задерживаются более чем на 3 дня (статус 'В пути' или 'Не доставлено')
+        
         three_days_ago = today - timedelta(days=3)
         overdue = Delivery.objects.filter(
             status__in=[
