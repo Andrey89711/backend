@@ -6,6 +6,18 @@ class Contract(models.Model):
         verbose_name='ID договора'
     )
     
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name='Дата создания'
+    )
+    
+    file_path = models.CharField(
+        max_length=500,
+        null=True,
+        blank=True,
+        verbose_name='Путь к файлу'
+    )
+    
     class Meta:
         db_table = 'contract'
         verbose_name = 'Договор'

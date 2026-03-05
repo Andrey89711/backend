@@ -36,16 +36,12 @@ def _convert_with_libreoffice(input_path: Path, output_path: Path) -> tuple[bool
         try:
             converted.replace(output_path)
         except PermissionError:
-            pass # Файл может быть занят
+            pass
 
     return output_path.exists(), None
 
 def convert_docx_to_pdf(input_file: Path, output_file: Path) -> Path:
-    """
-    Конвертирует DOCX в PDF.
-    :param input_file: Путь к исходному .docx
-    :param output_file: Путь, куда сохранить .pdf
-    """
+    """Конвертирует DOCX в PDF"""
     input_path = input_file.resolve()
     if not input_path.exists():
         raise FileNotFoundError(f"Input file not found: {input_path}")
@@ -57,14 +53,12 @@ def convert_docx_to_pdf(input_file: Path, output_file: Path) -> Path:
 
     errors = []
 
-    # Пробуем docx2pdf (требует MS Word на Windows или настроенный environment)
     ok, err = _convert_with_docx2pdf(input_path, output_path)
     if ok:
         return output_path
     if err:
         errors.append(err)
 
-    # Пробуем LibreOffice (кроссплатформенно, нужен установленный LibreOffice)
     ok, err = _convert_with_libreoffice(input_path, output_path)
     if ok:
         return output_path

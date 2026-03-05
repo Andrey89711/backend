@@ -1,13 +1,11 @@
 import os
+import uuid
 from pathlib import Path
 from django.conf import settings
 from django.http import FileResponse
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from django.utils import timezone
-from datetime import timedelta
-from django.db.models import Sum, Count
 
 from rest_framework.viewsets import ModelViewSet 
 from ...models import Concluded, Contract, MaterialsInContract
@@ -73,6 +71,35 @@ class ContractViewSet(ModelViewSet):
             "details": serializer.data
         })
 
+    @action(detail=True, methods=['get'], url_path='file/download')
+    def download_file(self, request, pk=None):
+        """Скачивание файла договора по ID"""
+        try:
+            contract = Contract.objects.get(id_contract=pk)
+        except Contract.DoesNotExist:
+            return Response({"error": "Договор не найден"}, status=status.HTTP_404_NOT_FOUND)
+
+        if not contract.file_path:
+            return Response({"error": "Файл не прикреплён"}, status=status.HTTP_404_NOT_FOUND)
+
+        from pathlib import Path
+        from django.conf import settings
+        from django.http import FileResponse
+
+        file_path = Path(settings.MEDIA_ROOT) / contract.file_path
+        
+        if not file_path.exists():
+            return Response({"error": "Файл не найден на сервере"}, status=status.HTTP_404_NOT_FOUND)
+
+        inline = request.query_params.get('inline', 'false').lower() == 'true'
+        
+        return FileResponse(
+            open(file_path, 'rb'),
+            as_attachment=not inline,
+            filename=Path(contract.file_path).name,
+            content_type='application/pdf'
+        )
+
 class MaterialsInContractViewSet(ModelViewSet):
     """Материалы в договоре"""
     queryset = MaterialsInContract.objects.all().select_related('id_materials', 'id_contract')
@@ -87,11 +114,6 @@ class MaterialsInContractViewSet(ModelViewSet):
         return Response(self.get_serializer(qs, many=True).data)
 
 class ContractDocumentViewSet(viewsets.ViewSet):
-    """
-    Работа с файлами договоров (Загрузка DOCX -> PDF, Список, Скачивание).
-    Файлы хранятся в MEDIA_ROOT/contracts_docs/
-    """
-    # Папка для хранения PDF внутри MEDIA_ROOT
     STORAGE_DIR_NAME = 'contracts_docs'
 
     def _get_storage_path(self):
@@ -99,12 +121,7 @@ class ContractDocumentViewSet(viewsets.ViewSet):
 
     @action(detail=False, methods=['post'])
     def upload_docx(self, request):
-        """
-        Принимает DOCX, конвертирует в PDF и сохраняет.
-        Возвращает имя сохраненного PDF файла.
-        """
-        print(f"[DEBUG] Content-Type: {request.content_type}")  # Должно быть multipart...
-        print(f"[DEBUG] FILES: {request.FILES}")
+        """Принимает DOCX, конвертирует в PDF, создаёт запись Contract с file_path"""
         file_obj = request.FILES.get('file')
         if not file_obj:
             return Response({"error": "Файл не передан"}, status=status.HTTP_400_BAD_REQUEST)
@@ -115,29 +132,37 @@ class ContractDocumentViewSet(viewsets.ViewSet):
         storage_path = self._get_storage_path()
         storage_path.mkdir(parents=True, exist_ok=True)
 
-        # Временное сохранение DOCX
-        temp_docx = storage_path / f"temp_{file_obj.name}"
+        unique_id = uuid.uuid4().hex
+        original_name = Path(file_obj.name).stem
+        pdf_filename = f"{unique_id}_{original_name}.pdf"
+        output_pdf = storage_path / pdf_filename
+
+        temp_docx = storage_path / f"temp_{unique_id}.docx"
         with open(temp_docx, 'wb+') as destination:
             for chunk in file_obj.chunks():
                 destination.write(chunk)
 
-        # Имя выходного PDF (можно генерировать уникальное, пока оставляем имя исходного)
-        pdf_filename = f"{file_obj.name[:-5]}.pdf" # заменяем .docx на .pdf
-        output_pdf = storage_path / pdf_filename
-
         try:
             convert_docx_to_pdf(temp_docx, output_pdf)
-            # Удаляем временный DOCX после успеха
+            
+            contract = Contract.objects.create(
+                file_path=f"{self.STORAGE_DIR_NAME}/{pdf_filename}"
+            )
+            
             temp_docx.unlink(missing_ok=True)
+            
             return Response({
-            "status": "success", 
-            "filename": pdf_filename,
-            "path": str(output_pdf)
-        }, status=status.HTTP_201_CREATED)
+                "status": "success",
+                "contract_id": contract.id_contract,
+                "filename": pdf_filename,
+                "path": str(output_pdf)
+            }, status=status.HTTP_201_CREATED)
+            
         except Exception as e:
-            # Удаляем мусор при ошибке
+            
             temp_docx.unlink(missing_ok=True)
-            output_pdf.unlink(missing_ok=True)
+            if output_pdf.exists():
+                output_pdf.unlink()
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     @action(detail=False, methods=['get'])
@@ -163,14 +188,12 @@ class ContractDocumentViewSet(viewsets.ViewSet):
         if not filename:
             return Response({"error": "Параметр filename обязателен"}, status=status.HTTP_400_BAD_REQUEST)
 
-        # Защита от выхода за пределы директории (Directory Traversal)
         if '..' in filename or filename.startswith('/'):
             return Response({"error": "Некорректное имя файла"}, status=status.HTTP_400_BAD_REQUEST)
 
         storage_path = self._get_storage_path()
         file_path = storage_path / filename
 
-        # Проверка, что файл реально лежит внутри нашей папки
         try:
             file_path.resolve().relative_to(storage_path.resolve())
         except ValueError:
