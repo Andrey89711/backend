@@ -45,9 +45,44 @@ class ConcludedSerializer(serializers.ModelSerializer):
         return f"{obj.cost:,.2f} ₽"
 
 class ContractSerializer(serializers.ModelSerializer):
-    """Базовый сериализатор для модели Contract (если нужно управлять просто ID)"""
+    """Базовый сериализатор для модели Contract"""
     concluded_info = ConcludedSerializer(source='concluded', read_only=True)
+    
+    filename = serializers.SerializerMethodField()
+    file_download_url = serializers.SerializerMethodField()
+    file_preview_url = serializers.SerializerMethodField()
     
     class Meta:
         model = Contract
-        fields = ['id_contract', 'concluded_info']
+        fields = [
+            'id_contract',
+            'created_at',
+            'file_path',
+            'filename',
+            'file_download_url',
+            'file_preview_url',
+            'concluded_info'
+        ]
+        read_only_fields = ['id_contract', 'created_at', 'filename', 'file_download_url', 'file_preview_url']
+    
+    def get_filename(self, obj):
+        if not obj.file_path:
+            return None
+        from pathlib import Path
+        return Path(obj.file_path).name
+    
+    def get_file_download_url(self, obj):
+        if not obj.file_path:
+            return None
+        request = self.context.get('request')
+        if request:
+            return request.build_absolute_uri(f'/api/contracts/{obj.id_contract}/file/download/')
+        return f'/api/contracts/{obj.id_contract}/file/download/'
+    
+    def get_file_preview_url(self, obj):
+        if not obj.file_path:
+            return None
+        request = self.context.get('request')
+        if request:
+            return request.build_absolute_uri(f'/api/contracts/{obj.id_contract}/file/download/?inline=true')
+        return f'/api/contracts/{obj.id_contract}/file/download/?inline=true'
