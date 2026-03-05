@@ -179,10 +179,7 @@ class ContractDocumentViewSet(viewsets.ViewSet):
 
     @action(detail=False, methods=['get'], url_path='download')
     def download_file(self, request):
-        """
-        Скачивание файла по имени.
-        Пример: /api/contracts/documents/download/?filename=dogovor.pdf
-        """
+        """Скачивание файла по имени."""
         filename = request.query_params.get('filename')
         inline = request.query_params.get('inline', 'false').lower() == 'true'
         if not filename:
