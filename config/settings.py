@@ -7,6 +7,8 @@ load_dotenv()
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
+MEDIA_ROOT = BASE_DIR.parent / 'media_files' 
+MEDIA_URL = '/media/'
 SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-dev-key-change-in-production')
 DEBUG = os.getenv('DEBUG', 'True') == 'True'
 
