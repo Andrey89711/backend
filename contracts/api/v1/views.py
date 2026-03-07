@@ -3,14 +3,17 @@ import uuid
 from pathlib import Path
 from django.conf import settings
 from django.http import FileResponse
+from django.utils import timezone
+from django.db.models import Count, Sum
+from datetime import timedelta
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
-from rest_framework.viewsets import ModelViewSet 
 from ...models import Concluded, Contract, MaterialsInContract
 from .serializers import ConcludedSerializer, ContractSerializer, MaterialsInContractSerializer
 from ...utils.docx_to_pdf import convert_docx_to_pdf
+from rest_framework.viewsets import ModelViewSet 
 
 class ConcludedViewSet(ModelViewSet):
     """Заключенные договоры"""
