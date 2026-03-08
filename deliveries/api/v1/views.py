@@ -11,7 +11,7 @@ class DeliveryViewSet(viewsets.ModelViewSet):
     serializer_class = DeliverySerializer
 
     @action(detail=False, methods=['get'])
-    def  problem(self, request):
+    def  alerts(self, request):
         """
         Сводка проблемных зон: задержки и непринятые акты.
         URL: /api/catalog/deliveries/alerts/

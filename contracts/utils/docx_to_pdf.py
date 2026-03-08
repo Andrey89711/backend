@@ -8,11 +8,25 @@ def _convert_with_docx2pdf(input_path: Path, output_path: Path) -> tuple[bool, O
         from docx2pdf import convert
     except ImportError:
         return False, "docx2pdf is not installed"
+        
+
+    try:
+        import pythoncom
+        pythoncom.CoInitialize()
+    except ImportError:
+        pythoncom = None
+
     try:
         convert(str(input_path), str(output_path))
     except Exception as exc:
         return False, f"docx2pdf failed: {exc}"
+    finally:
+
+        if pythoncom:
+            pythoncom.CoUninitialize()
+
     return output_path.exists(), None
+
 
 def _convert_with_libreoffice(input_path: Path, output_path: Path) -> tuple[bool, Optional[str]]:
     soffice = shutil.which("soffice") or shutil.which("libreoffice")
@@ -39,6 +53,7 @@ def _convert_with_libreoffice(input_path: Path, output_path: Path) -> tuple[bool
             pass
 
     return output_path.exists(), None
+
 
 def convert_docx_to_pdf(input_file: Path, output_file: Path) -> Path:
     """Конвертирует DOCX в PDF"""
