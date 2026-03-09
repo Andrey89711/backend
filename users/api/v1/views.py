@@ -5,13 +5,16 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.exceptions import TokenError
 from django.contrib.auth.models import User
 from django.contrib.auth import authenticate
+from django.core.mail import send_mail
+from django.conf import settings
 from .serializers import (
-    RegisterSerializer, 
-    LoginSerializer, 
+    RegisterSerializer,
+    LoginSerializer,
     UserSerializer,
     LogoutSerializer
 )
 from drf_spectacular.utils import extend_schema
+from users.models import EmailVerificationToken
 
 
 class RegisterView(generics.CreateAPIView):
@@ -26,7 +29,24 @@ class RegisterView(generics.CreateAPIView):
         responses={201: RegisterSerializer}
     )
     def post(self, request, *args, **kwargs):
-        return super().post(request, *args, **kwargs)
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        user = serializer.save()
+        user.is_active = False
+        user.save()
+
+        token_obj = EmailVerificationToken.objects.create(user=user)
+        verify_url = f"{settings.FRONTEND_URL}/verify-email?token={token_obj.token}"
+        send_mail(
+            subject='Подтвердите ваш email',
+            message=f'Для подтверждения email перейдите по ссылке:\n{verify_url}',
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            recipient_list=[user.email],
+        )
+        return Response(
+            {'message': 'Регистрация успешна. Проверьте email для подтверждения.'},
+            status=status.HTTP_201_CREATED
+        )
 
 
 class LoginView(generics.GenericAPIView):
@@ -46,13 +66,22 @@ class LoginView(generics.GenericAPIView):
         username = serializer.validated_data['username']
         password = serializer.validated_data['password']
         
-        user = authenticate(username=username, password=password)
-        
-        if user is None:
+        # Сначала ищем пользователя вручную, чтобы различить 401 и 403
+        try:
+            candidate = User.objects.get(username=username)
+        except User.DoesNotExist:
+            return Response({'error': 'Неверные учетные данные'}, status=status.HTTP_401_UNAUTHORIZED)
+
+        if not candidate.check_password(password):
+            return Response({'error': 'Неверные учетные данные'}, status=status.HTTP_401_UNAUTHORIZED)
+
+        if not candidate.is_active:
             return Response(
-                {'error': 'Неверные учетные данные'},
-                status=status.HTTP_401_UNAUTHORIZED
+                {'error': 'Email не подтверждён. Проверьте вашу почту.'},
+                status=status.HTTP_403_FORBIDDEN
             )
+
+        user = candidate
         
         refresh = RefreshToken.for_user(user)
         
@@ -65,6 +94,7 @@ class LoginView(generics.GenericAPIView):
 
 class TokenRefreshView(BaseTokenRefreshView):
     """Обновление access токена"""
+    permission_classes = [permissions.AllowAny]
     
     @extend_schema(
         summary="Обновление токена",
@@ -100,6 +130,27 @@ class LogoutView(generics.GenericAPIView):
                 {'error': 'Неверный или просроченный токен'},
                 status=status.HTTP_400_BAD_REQUEST
             )
+
+
+class VerifyEmailView(generics.GenericAPIView):
+    """Подтверждение email по токену"""
+    permission_classes = [permissions.AllowAny]
+    authentication_classes = []
+
+    def get(self, request, *args, **kwargs):
+        token = request.query_params.get('token')
+        if not token:
+            return Response({'error': 'Токен не передан'}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            token_obj = EmailVerificationToken.objects.select_related('user').get(token=token)
+        except (EmailVerificationToken.DoesNotExist, Exception):
+            return Response({'error': 'Неверный или просроченный токен'}, status=status.HTTP_400_BAD_REQUEST)
+
+        user = token_obj.user
+        user.is_active = True
+        user.save()
+        token_obj.delete()
+        return Response({'message': 'Email успешно подтверждён. Теперь вы можете войти.'})
 
 
 class UserDetailView(generics.RetrieveAPIView):

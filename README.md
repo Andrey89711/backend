@@ -84,12 +84,42 @@ python manage.py createsuperuser
 python manage.py runserver
 ```
 
-## Сидирование тестовых данных
+## Тестовые данные
 
-Из корня `backend`:
+Загрузить полный набор тестовых данных:
 
 ```bash
-python data_set.py
+python manage.py seed
+```
+
+Команда идемпотентна — повторный запуск безопасен. Создаёт:
+- 10 пользователей (все роли)
+- 3 директора, 3 бухгалтера, 4 менеджера, 3 кладовщика
+- 6 поставщиков (active / approved / pending)
+- 12 материалов с историей цен от 3 поставщиков
+- 3 склада, 12 позиций инвентаря
+- 8 контрактов (active / review / draft / closed) + 6 заключённых договоров
+- 6 поставок с разными статусами (включая просроченные и задержанные)
+
+**Учётные записи** (пароль у всех: `TestPass123!`):
+
+| Логин | Роль | Доступ |
+|---|---|---|
+| `admin` | Администратор | Всё + Django Admin |
+| `manager1`, `manager2` | Менеджер | Контракты, Статистика |
+| `accountant1`, `accountant2` | Бухгалтер | Контракты |
+| `storekeeper1/2/3` | Кладовщик | Склады, Поставки |
+| `director1` | Директор | Контракты, Статистика |
+| `viewer1` | Просмотр | Только чтение |
+
+## Тестирование
+
+```bash
+# Запуск всех тестов (SQLite in-memory, без миграций)
+python manage.py test users partners contracts --settings=config.test_settings
+
+# С подробным выводом
+python manage.py test users partners contracts --settings=config.test_settings -v 2
 ```
 
 ## API
@@ -97,15 +127,38 @@ python data_set.py
 - Swagger UI: `http://127.0.0.1:8000/api/docs/`
 - OpenAPI schema: `http://127.0.0.1:8000/api/schema/`
 
-Основные префиксы:
+Все эндпоинты требуют JWT-токен в заголовке, кроме `register`, `login`, `token/refresh`, `verify-email`.
 
-- `api/auth/`
-- `api/personnel/`
-- `api/partners/`
-- `api/catalog/`
-- `api/warehousing/`
-- `api/contracts/`
-- `api/deliveries/`
+### Аутентификация (`api/auth/`)
+
+| Метод | URL | Описание |
+|---|---|---|
+| POST | `register/` | Регистрация (создаёт неактивного пользователя, отправляет письмо) |
+| POST | `login/` | Вход → `{ access, refresh, user }` |
+| POST | `token/refresh/` | Обновление access-токена |
+| POST | `logout/` | Инвалидация refresh-токена |
+| GET  | `me/` | Профиль текущего пользователя (включает `role`) |
+| GET  | `verify-email/?token=...` | Подтверждение email |
+
+### Основные ресурсы
+
+| Префикс | Ресурс | Дополнительные action |
+|---|---|---|
+| `api/personnel/` | directors, accountants, managers, storekeepers | — |
+| `api/partners/` | suppliers | `{id}/set-status/`, `{id}/today-prices/`, `{id}/price-trend/` |
+| `api/catalog/` | materials, prices | — |
+| `api/warehousing/` | warehouses, works, inventory | — |
+| `api/contracts/` | contracts, concluded, materials | `{id}/set-status/`, `{id}/file/download/`, `concluded/statistics/`, `concluded/by_manager/` |
+| `api/deliveries/` | deliveries, acts-of-arrival, acceptances | `deliveries/alerts/`, `deliveries/pending_today/`, `{id}/set_arrived/` |
+| `api/contracts/documents/` | — | `upload_docx/`, `list_files/`, `download/` |
+
+### Статусы
+
+**Поставщик:** `pending` → `approved` → `active`
+
+**Договор:** `draft` → `review` → `active` → `closed`
+
+**Поставка:** `Pending` → `In Transit` → `Delivered` → `Received` | `Not Delivered` | `Delayed` | `Cancel`
 
 ## Важно по миграциям
 

@@ -56,6 +56,7 @@ class ContractSerializer(serializers.ModelSerializer):
         model = Contract
         fields = [
             'id_contract',
+            'status',
             'created_at',
             'file_path',
             'filename',

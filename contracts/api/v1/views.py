@@ -54,12 +54,12 @@ class ConcludedViewSet(ModelViewSet):
     @action(detail=False, methods=['get'])
     def by_manager(self, request):
         logger.info("Запрос группировки договоров по менеджерам")
-        data = self.queryset.values('id_manager__full_name', 'id_manager__id').annotate(
+        data = self.queryset.values('id_manager__full_name', 'id_manager__id_manager').annotate(
             count=Count('id_contract'), total_cost=Sum('cost')
         )
         result = [
             {
-                "manager_id": item['id_manager__id'],
+                "manager_id": item['id_manager__id_manager'],
                 "manager_name": item['id_manager__full_name'] or "Не указан",
                 "contracts_count": item['count'],
                 "total_cost": item['total_cost'] or 0
@@ -74,6 +74,18 @@ class ContractViewSet(ModelViewSet):
     """База контракта"""
     queryset = Contract.objects.all()
     serializer_class = ContractSerializer
+
+    @action(detail=True, methods=['post'], url_path='set-status')
+    def set_status(self, request, pk=None):
+        """Смена статуса договора: draft / review / active / closed"""
+        contract = self.get_object()
+        new_status = request.data.get('status')
+        allowed = ['draft', 'review', 'active', 'closed']
+        if new_status not in allowed:
+            return Response({'error': 'Недопустимый статус. Допустимые: ' + ', '.join(allowed)}, status=status.HTTP_400_BAD_REQUEST)
+        contract.status = new_status
+        contract.save()
+        return Response({'id_contract': contract.id_contract, 'status': contract.status})
 
     @action(detail=True, methods=['get'])
     def materials_summary(self, request, pk=None):

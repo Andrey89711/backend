@@ -1,6 +1,7 @@
 from rest_framework import serializers
 from django.contrib.auth.models import User
 from django.contrib.auth.password_validation import validate_password
+from users.models import UserProfile
 
 
 class RegisterSerializer(serializers.ModelSerializer):
@@ -29,6 +30,7 @@ class RegisterSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         validated_data.pop('password2')
         user = User.objects.create_user(**validated_data)
+        UserProfile.objects.create(user=user)
         return user
 
 
@@ -45,7 +47,15 @@ class LogoutSerializer(serializers.Serializer):
 
 class UserSerializer(serializers.ModelSerializer):
     """Сериализатор для пользователя"""
+    role = serializers.SerializerMethodField()
+
+    def get_role(self, obj):
+        try:
+            return obj.profile.role
+        except UserProfile.DoesNotExist:
+            return 'viewer'
+
     class Meta:
         model = User
-        fields = ('id', 'username', 'email', 'first_name', 'last_name', 'date_joined')
-        read_only_fields = ('id', 'date_joined')
+        fields = ('id', 'username', 'email', 'first_name', 'last_name', 'date_joined', 'role')
+        read_only_fields = ('id', 'date_joined', 'role')

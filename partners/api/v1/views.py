@@ -15,6 +15,18 @@ class SupplierViewSet(viewsets.ModelViewSet):
     filter_backends = [filters.SearchFilter]
     search_fields = ['name', 'tax_id']
 
+    @action(detail=True, methods=['post'], url_path='set-status')
+    def set_status(self, request, pk=None):
+        """Смена статуса поставщика: pending / approved / active"""
+        supplier = self.get_object()
+        new_status = request.data.get('status')
+        allowed = ['pending', 'approved', 'active']
+        if new_status not in allowed:
+            return Response({'error': 'Недопустимый статус. Допустимые: ' + ', '.join(allowed)}, status=status.HTTP_400_BAD_REQUEST)
+        supplier.status = new_status
+        supplier.save()
+        return Response({'id_supplier': supplier.id_supplier, 'status': supplier.status})
+
     # 1. Актуальные цены поставщика на сегодня
     @action(detail=True, methods=['get'], url_path='today-prices')
     def today_prices(self, request, pk=None):

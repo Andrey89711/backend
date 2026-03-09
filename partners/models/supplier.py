@@ -25,7 +25,17 @@ class Supplier(models.Model):
         max_length=500,
         verbose_name='Платежные реквизиты'
     )
-    
+    status = models.CharField(
+        max_length=20,
+        choices=[
+            ('pending', 'На рассмотрении'),
+            ('approved', 'Утверждён'),
+            ('active', 'Активен'),
+        ],
+        default='pending',
+        verbose_name='Статус'
+    )
+
     class Meta:
         db_table = 'supplier'
         verbose_name = 'Поставщик'

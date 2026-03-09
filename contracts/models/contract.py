@@ -17,7 +17,18 @@ class Contract(models.Model):
         blank=True,
         verbose_name='Путь к файлу'
     )
-    
+    status = models.CharField(
+        max_length=20,
+        choices=[
+            ('draft', 'Черновик'),
+            ('review', 'На согласовании'),
+            ('active', 'Активен'),
+            ('closed', 'Закрыт'),
+        ],
+        default='draft',
+        verbose_name='Статус'
+    )
+
     class Meta:
         db_table = 'contract'
         verbose_name = 'Договор'

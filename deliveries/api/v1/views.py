@@ -1,3 +1,4 @@
+import logging
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -6,6 +7,10 @@ from datetime import timedelta
 from deliveries.models import AcceptanceOfDelivery, ActOfArrival, Delivery
 from .serializers import DeliverySerializer, ActOfArrivalSerializer, AcceptanceOfDeliverySerializer
 from ...choices import DeliveryStatus
+from contracts.models import MaterialsInContract
+from warehousing.models import Inventory, Works
+
+logger = logging.getLogger(__name__)
 class DeliveryViewSet(viewsets.ModelViewSet):
     queryset = Delivery.objects.all().select_related('id_contract', 'id_act_of_arrival')
     serializer_class = DeliverySerializer
@@ -75,12 +80,55 @@ class AcceptanceOfDeliveryViewSet(viewsets.ModelViewSet):
     serializer_class = AcceptanceOfDeliverySerializer
 
     def create(self, request, *args, **kwargs):
-        """Переопределяем создание, чтобы автоматически менять статус акта при приемке"""
+        """Создаём приемку, обновляем статус акта и остатки склада."""
         response = super().create(request, *args, **kwargs)
-        # Если приемка создана, находим акт и обновляем его статус
+
         act_id = request.data.get('id_act_of_arrival')
+        storekeeper_id = request.data.get('id_storekeeper')
+
         if act_id:
-            act = ActOfArrival.objects.get(pk=act_id)
-            act.status = 'RECEIVED' # Или ваш статус из DeliveryStatus
-            act.save()
+            try:
+                act = ActOfArrival.objects.get(pk=act_id)
+                act.status = 'RECEIVED'
+                act.save()
+            except ActOfArrival.DoesNotExist:
+                logger.warning(f"ActOfArrival pk={act_id} не найден при создании приемки")
+
+        # Автообновление складских остатков
+        if act_id and storekeeper_id:
+            try:
+                # Находим склад кладовщика
+                works_qs = Works.objects.filter(id_storekeeper_id=storekeeper_id)
+                if not works_qs.exists():
+                    logger.warning(f"Кладовщик id={storekeeper_id} не привязан ни к одному складу")
+                else:
+                    warehouse = works_qs.first().id_warehouse
+
+                    # Находим контракт через поставку
+                    delivery = Delivery.objects.filter(id_act_of_arrival_id=act_id).first()
+                    if delivery and delivery.id_contract_id:
+                        materials_qs = MaterialsInContract.objects.filter(
+                            id_contract_id=delivery.id_contract_id
+                        ).select_related('id_materials')
+
+                        for mic in materials_qs:
+                            qty = mic.actual_quantity or 0
+                            if qty <= 0:
+                                continue
+                            inv, created = Inventory.objects.get_or_create(
+                                id_warehouse=warehouse,
+                                id_materials=mic.id_materials,
+                                defaults={'quantity': 0}
+                            )
+                            inv.quantity += qty
+                            inv.save()
+                            logger.info(
+                                f"Склад {warehouse.id_warehouse}: материал "
+                                f"{mic.id_materials_id} +{qty} (итого {inv.quantity})"
+                            )
+                    else:
+                        logger.warning(f"Поставка для акта id={act_id} не найдена или без контракта")
+            except Exception as e:
+                logger.error(f"Ошибка обновления остатков при приемке: {e}", exc_info=True)
+
         return response
