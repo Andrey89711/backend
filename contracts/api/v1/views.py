@@ -3,9 +3,10 @@ import uuid
 import logging
 from pathlib import Path
 from datetime import timedelta
-
+import tempfile
+from docxtpl import DocxTemplate
 from django.conf import settings
-from django.http import FileResponse
+from django.http import FileResponse, HttpResponse
 from django.utils import timezone
 from django.db.models import Count, Sum
 from rest_framework import status, viewsets
@@ -17,7 +18,6 @@ from ...models import Concluded, Contract, MaterialsInContract
 from .serializers import ConcludedSerializer, ContractSerializer, MaterialsInContractSerializer
 from ...utils.docx_to_pdf import convert_docx_to_pdf
 
-# Настройка логирования для вывода в консоль
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
@@ -155,7 +155,7 @@ class MaterialsInContractViewSet(ModelViewSet):
 
 class ContractDocumentViewSet(viewsets.ViewSet):
     STORAGE_DIR_NAME = 'contracts_docs'
-
+    TEMPLATE_DIR = Path(settings.MEDIA_ROOT) / 'contracts_templates'
     def _get_storage_path(self):
         return Path(settings.MEDIA_ROOT) / self.STORAGE_DIR_NAME
 
@@ -266,3 +266,120 @@ class ContractDocumentViewSet(viewsets.ViewSet):
             filename=filename,
             content_type='application/pdf'
         )
+        
+    @action(detail=False, methods=['post'], url_path='generate-docx')
+    def generate_docx(self, request):
+        """Возврат DOCX"""
+        logger.info("Запрос на генерацию DOCX из шаблона")
+        
+        template_name = request.data.get('template')
+        data = request.data.get('data', {})
+        
+        if not template_name:
+            return Response({"error": "Параметр 'template' обязателен"}, 
+                        status=status.HTTP_400_BAD_REQUEST)
+        
+        template_path = self.TEMPLATE_DIR / template_name
+        if not template_path.exists():
+            logger.error(f"Шаблон не найден: {template_path}")
+            return Response({"error": f"Шаблон '{template_name}' не найден"}, 
+                        status=status.HTTP_404_NOT_FOUND)
+        
+        try:
+            doc = DocxTemplate(str(template_path))
+            doc.render(data)
+            
+            with tempfile.NamedTemporaryFile(suffix='.docx', delete=False) as tmp:
+                tmp_path = Path(tmp.name)
+                doc.save(tmp_path)
+            
+            with open(tmp_path, 'rb') as f:
+                file_content = f.read()
+            
+            base_name = Path(template_name).stem.replace('_template', '')
+            filename = f"{base_name}_{timezone.now().strftime('%Y%m%d_%H%M%S')}.docx"
+            
+            response = HttpResponse(
+                file_content,
+                content_type='application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+            )
+            response['Content-Disposition'] = f'attachment; filename="{filename}"'
+            
+            tmp_path.unlink(missing_ok=True)
+            
+            logger.info(f"DOCX успешно сгенерирован и отправлен: {filename}")
+            return response
+                    
+        except Exception as e:
+            logger.error(f"Ошибка генерации DOCX: {e}", exc_info=True)
+            return Response({"error": str(e)}, 
+                        status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+    @action(detail=False, methods=['post'], url_path='generate-pdf')
+    def generate_pdf(self, request):
+        """Возврат pdf"""
+        logger.info("Запрос на сохранение PDF в БД")
+        
+        template_name = request.data.get('template')
+        data = request.data.get('data', {})
+        
+        if not template_name:
+            return Response({"error": "Параметр 'template' обязателен"}, 
+                        status=status.HTTP_400_BAD_REQUEST)
+        
+        template_path = self.TEMPLATE_DIR / template_name
+        if not template_path.exists():
+            logger.error(f"Шаблон не найден: {template_path}")
+            return Response({"error": f"Шаблон '{template_name}' не найден"}, 
+                        status=status.HTTP_404_NOT_FOUND)
+        
+        try:
+            doc = DocxTemplate(str(template_path))
+            doc.render(data)
+            
+            with tempfile.NamedTemporaryFile(suffix='.docx', delete=False) as tmp:
+                tmp_path = Path(tmp.name)
+                doc.save(tmp_path)
+            
+            with tempfile.NamedTemporaryFile(suffix='.pdf', delete=False) as pdf_tmp:
+                pdf_path = Path(pdf_tmp.name)
+            
+            convert_docx_to_pdf(tmp_path, pdf_path)
+            
+            with open(pdf_path, 'rb') as f:
+                file_content = f.read()
+            
+            storage_path = self._get_storage_path()
+            storage_path.mkdir(parents=True, exist_ok=True)
+            
+            unique_id = uuid.uuid4().hex
+            base_name = Path(template_name).stem.replace('_template', '')
+            filename = f"{base_name}_{timezone.now().strftime('%Y%m%d_%H%M%S')}.pdf"
+            saved_filename = f"{unique_id}_{filename}"
+            saved_path = storage_path / saved_filename
+            
+            with open(saved_path, 'wb') as f:
+                f.write(file_content)
+            
+            contract = Contract.objects.create(
+                file_path=f"{self.STORAGE_DIR_NAME}/{saved_filename}"
+            )
+            
+            for path in [tmp_path, pdf_path]:
+                path.unlink(missing_ok=True)
+            
+            logger.info(f"PDF сохранён в БД: contract_id={contract.id_contract}")
+            
+            return Response({
+                "status": "success",
+                "message": "Файл успешно сохранён",
+                "contract_id": contract.id_contract,
+                "filename": saved_filename,
+                "file_url": f"/media/{self.STORAGE_DIR_NAME}/{saved_filename}"
+            }, status=status.HTTP_201_CREATED)
+                    
+        except Exception as e:
+            logger.error(f"Ошибка сохранения PDF: {e}", exc_info=True)
+            return Response({"error": str(e)}, 
+                        status=status.HTTP_500_INTERNAL_SERVER_ERROR)
