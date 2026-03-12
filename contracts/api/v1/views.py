@@ -13,11 +13,12 @@ from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.viewsets import ModelViewSet
-
+from rest_framework_simplejwt.tokens import AccessToken 
 from ...models import Concluded, Contract, MaterialsInContract
 from .serializers import ConcludedSerializer, ContractSerializer, MaterialsInContractSerializer
 from ...utils.docx_to_pdf import convert_docx_to_pdf
-
+from rest_framework_simplejwt.tokens import AccessToken
+from rest_framework.exceptions import AuthenticationFailed
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
@@ -109,6 +110,7 @@ class ContractViewSet(ModelViewSet):
     def download_file(self, request, pk=None):
         """Скачивание файла договора по ID"""
         logger.info(f"Запрос на скачивание файла для контракта ID={pk}")
+        
         try:
             contract = Contract.objects.get(id_contract=pk)
         except Contract.DoesNotExist:
@@ -124,6 +126,18 @@ class ContractViewSet(ModelViewSet):
         if not file_path.exists():
             logger.error(f"Файл {file_path} не существует на сервере")
             return Response({"error": "Файл не найден на сервере"}, status=status.HTTP_404_NOT_FOUND)
+
+        token = request.query_params.get('token')
+        if token:
+            try:
+                AccessToken(token)
+            except Exception as e:
+                logger.error(f"❌ Неверный токен в URL: {type(e).__name__}")
+                return Response({"error": "Неверный или просроченный токен"}, 
+                            status=status.HTTP_401_UNAUTHORIZED)
+        elif not request.user.is_authenticated:
+            return Response({"error": "Учетные данные не были предоставлены."}, 
+                        status=status.HTTP_401_UNAUTHORIZED)
 
         inline = request.query_params.get('inline', 'false').lower() == 'true'
         logger.info(f"Отправка файла {file_path}, inline={inline}")
