@@ -1,15 +1,11 @@
-﻿from django.db import models
+from django.db import models
 
 class Concluded(models.Model):
-    conclusion_dates = models.DateField(
-        verbose_name='Дата заключения'
-    )
-    payment_date = models.DateField(
-        verbose_name='Дата оплаты'
-    )
-    cost = models.FloatField(
-        verbose_name='Стоимость'
-    )
+    conclusion_dates = models.DateField(verbose_name='Дата заключения')
+    payment_date = models.DateField(verbose_name='Дата оплаты')
+    delivery_date = models.DateField(null=True, blank=True, verbose_name='Дата поставки')
+    cost = models.FloatField(default=0, verbose_name='Стоимость')
+    is_paid = models.BooleanField(default=False, verbose_name='Оплачен')
     id_supplier = models.ForeignKey(
         'partners.Supplier',
         on_delete=models.CASCADE,
@@ -41,14 +37,11 @@ class Concluded(models.Model):
         db_column='id_director',
         verbose_name='Директор'
     )
-    
+
     class Meta:
         db_table = 'concluded'
         verbose_name = 'Заключенный договор'
         verbose_name_plural = 'Заключенные договоры'
-    
+
     def __str__(self):
         return f"Договор #{self.id_contract_id}"
-
-
-

@@ -17,7 +17,9 @@ class Materials(models.Model):
         max_length=500,
         verbose_name='Описание'
     )
-    
+    min_quantity = models.FloatField(null=True, blank=True, verbose_name='Минимальное количество')
+    max_quantity = models.FloatField(null=True, blank=True, verbose_name='Максимальное количество')
+
     class Meta:
         db_table = 'materials'
         verbose_name = 'Материал'

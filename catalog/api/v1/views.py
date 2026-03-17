@@ -2,17 +2,56 @@ from rest_framework import viewsets, filters
 from catalog.models import Materials, Prices
 from .serializers import MaterialsSerializer, PricesSerializer
 from django.utils import timezone
-from django.db.models import OuterRef, Subquery
+from django.db.models import OuterRef, Subquery, Sum, Q, Min
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from datetime import datetime
-from django.db.models import Min, Q
+
 
 class MaterialsViewSet(viewsets.ModelViewSet):
     queryset = Materials.objects.all()
     serializer_class = MaterialsSerializer
     filter_backends = [filters.SearchFilter]
     search_fields = ['name']
+
+    @action(detail=False, methods=['get'])
+    def analysis(self, request):
+        """
+        Возвращает материалы с заданным min/max количеством и фактическим остатком.
+        Статусы: ok / low / high / critical
+        """
+        from warehousing.models import Inventory
+        qs = Materials.objects.filter(
+            Q(min_quantity__isnull=False) | Q(max_quantity__isnull=False)
+        )
+        result = []
+        for mat in qs:
+            total = Inventory.objects.filter(id_materials=mat).aggregate(
+                total=Sum('quantity')
+            )['total'] or 0
+
+            mn = mat.min_quantity
+            mx = mat.max_quantity
+
+            if total == 0 and mn is not None and mn > 0:
+                s = 'critical'
+            elif mn is not None and total < mn:
+                s = 'low'
+            elif mx is not None and total > mx:
+                s = 'high'
+            else:
+                s = 'ok'
+
+            result.append({
+                'id': mat.id_materials,
+                'name': mat.name,
+                'unit_of_measurement': mat.unit_of_measurement,
+                'min_quantity': mn,
+                'max_quantity': mx,
+                'total_quantity': total,
+                'status': s,
+            })
+        return Response(result)
 
 class PricesViewSet(viewsets.ModelViewSet):
     queryset = Prices.objects.all()
