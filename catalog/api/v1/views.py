@@ -91,7 +91,7 @@ class PricesViewSet(viewsets.ModelViewSet):
     # 2. Эндпоинт: .../prices/best_offers/
     @action(detail=False, methods=['get'])
     def best_offers(self, request):
-        """"
+        """
         Возвращает лучшие предложения (минимальные цены) по каждому материалу на дату.
         Параметры: ?date=YYYY-MM-DD
         GET /api/catalog/prices/best_offers/?date=2026-02-28
@@ -100,28 +100,29 @@ class PricesViewSet(viewsets.ModelViewSet):
         if not target_date:
             return Response({"error": "Неверный формат даты"}, status=400)
 
-        # Сначала получаем актуальный срез (как в методе выше)
+        # Получаем актуальный срез: последняя цена на каждое сочетание материал+поставщик
         actual_ids = Prices.objects.filter(
             id_materials=OuterRef('id_materials'),
             id_supplier=OuterRef('id_supplier'),
             effective_dates__lte=target_date
         ).order_by('-effective_dates', '-id_prices').values('id_prices')[:1]
-        
-        actual_prices = Prices.objects.filter(id_prices__in=Subquery(actual_ids))
 
-        # Находим минимальные цены среди этого среза
-        min_prices_map = actual_prices.values('id_materials').annotate(min_val=Min('price'))
-        
-        # Фильтруем, чтобы оставить только лучшие предложения
-        q_filter = Q()
-        for item in min_prices_map:
-            q_filter |= Q(id_materials=item['id_materials'], price=item['min_val'])
-        
-        if not min_prices_map.exists():
+        actual_prices = list(Prices.objects.filter(
+            id_prices__in=Subquery(actual_ids)
+        ).select_related('id_materials', 'id_supplier'))
+
+        if not actual_prices:
             return Response([])
 
-        final_queryset = actual_prices.filter(q_filter)
-        serializer = self.get_serializer(final_queryset, many=True)
+        # Находим минимальную цену по каждому материалу (в Python, чтобы избежать
+        # сложных вложенных запросов)
+        best_by_material: dict = {}
+        for p in actual_prices:
+            mat_id = p.id_materials_id
+            if mat_id not in best_by_material or p.price < best_by_material[mat_id].price:
+                best_by_material[mat_id] = p
+
+        serializer = self.get_serializer(list(best_by_material.values()), many=True)
         return Response(serializer.data)
 
     # 3. Эндпоинт: .../prices/filtered_by_partners/
