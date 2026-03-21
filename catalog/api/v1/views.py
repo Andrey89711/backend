@@ -7,7 +7,7 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from datetime import datetime
 from ...models import Materials, Prices
-from contracts.models import MaterialsInContract
+from contracts.models import MaterialsInContract, Concluded
 
 class MaterialsViewSet(viewsets.ModelViewSet):
     queryset = Materials.objects.all()
@@ -22,8 +22,11 @@ class MaterialsViewSet(viewsets.ModelViewSet):
         Формат: {"Название материала": суммарное_количество, ...}
         """
         # Агрегируем сумму materials_quality_in_contract для каждого материала
+        concluded_contract_ids = Concluded.objects.values_list('id_contract', flat=True)
+        
         data = (
             MaterialsInContract.objects
+            .filter(id_contract_id__in=concluded_contract_ids)
             .values('id_materials__name')
             .annotate(total_quantity=Sum('materials_quality_in_contract'))
             .order_by('-total_quantity')
