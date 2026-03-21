@@ -1,5 +1,6 @@
 from django.db import models
 
+
 class MaterialsInContract(models.Model):
     materials_quality_in_contract = models.FloatField(
         verbose_name='Количество материалов в договоре'

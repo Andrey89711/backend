@@ -6,13 +6,31 @@ from django.db.models import Sum, Q
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from datetime import datetime
-
+from ...models import Materials, Prices
+from contracts.models import MaterialsInContract
 
 class MaterialsViewSet(viewsets.ModelViewSet):
     queryset = Materials.objects.all()
     serializer_class = MaterialsSerializer
     filter_backends = [filters.SearchFilter]
     search_fields = ['name']
+
+    @action(detail=False, methods=['get'])
+    def statistics(self, request):
+        """
+        Возвращает статистику по материалам: суммарное количество по всем договорам.
+        Формат: {"Название материала": суммарное_количество, ...}
+        """
+        # Агрегируем сумму materials_quality_in_contract для каждого материала
+        data = (
+            MaterialsInContract.objects
+            .values('id_materials__name')
+            .annotate(total_quantity=Sum('materials_quality_in_contract'))
+            .order_by('-total_quantity')
+        )
+        result = {item['id_materials__name']: item['total_quantity'] or 0 for item in data}
+        return Response(result)
+
 
     @action(detail=False, methods=['get'])
     def analysis(self, request):
