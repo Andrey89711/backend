@@ -28,7 +28,7 @@ class DeliverySerializer(serializers.ModelSerializer):
     def get_total_contract_value(self, obj):
         # Здесь можно добавить логику умножения кол-ва на цену, если нужно
         materials = obj.id_contract.materialsincontract_set.all()
-        return sum(m.actual_quantity for m in materials) # Пока просто сумма количеств
+        return sum(m.actual_quantity or 0 for m in materials) # Пока просто сумма количеств
 
 class ActOfArrivalSerializer(serializers.ModelSerializer):
     status_display = serializers.CharField(source='get_status_display', read_only=True)
