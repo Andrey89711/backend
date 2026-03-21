@@ -10,6 +10,7 @@ from .serializers import DeliverySerializer, ActOfArrivalSerializer, AcceptanceO
 from ...choices import DeliveryStatus
 from contracts.models import MaterialsInContract
 from warehousing.models import Inventory, Works
+from django.db.models import Sum, Count
 
 logger = logging.getLogger(__name__)
 
@@ -168,6 +169,22 @@ class ActOfArrivalViewSet(viewsets.ModelViewSet):
             'acceptance_id': acceptance.pk,
             'act_status': act.status,
         })
+    
+    @action(detail=False, methods=['get'])
+    def statistics(self, request):
+        """Статистика по актам прибытия."""
+        total = self.queryset.count()
+        without_acceptance = self.queryset.filter(acceptanceofdelivery__isnull=True).count()
+        with_acceptance = self.queryset.filter(acceptanceofdelivery__isnull=False).count()
+        by_status = self.queryset.values('status').annotate(count=Count('id_act_of_arrival'))
+        status_counts = {item['status']: item['count'] for item in by_status}
+        response_data = {
+            'total': total,
+            # 'without_acceptance': without_acceptance,
+            # 'with_acceptance': with_acceptance,
+            **status_counts  # распаковываем словарь статусов
+        }
+        return Response(response_data)
 
 
 def _check_min_stock_notifications(materials_qs):

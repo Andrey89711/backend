@@ -6,13 +6,61 @@ from django.db.models import Sum, Q
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from datetime import datetime
-
+from ...models import Materials, Prices
+from contracts.models import MaterialsInContract, Concluded
 
 class MaterialsViewSet(viewsets.ModelViewSet):
     queryset = Materials.objects.all()
     serializer_class = MaterialsSerializer
     filter_backends = [filters.SearchFilter]
     search_fields = ['name']
+
+    @action(detail=False, methods=['get'])
+    def statistics(self, request):
+        """
+        Возвращает статистику по материалам: суммарное количество по всем договорам.
+        Формат: {"Название материала": суммарное_количество, ...}
+        """
+        # Агрегируем сумму materials_quality_in_contract для каждого материала
+        concluded_contract_ids = Concluded.objects.values_list('id_contract', flat=True)
+        
+        data = (
+            MaterialsInContract.objects
+            .filter(id_contract_id__in=concluded_contract_ids)
+            .values('id_materials__name')
+            .annotate(total_quantity=Sum('materials_quality_in_contract'))
+            .order_by('-total_quantity')
+        )
+        result = {item['id_materials__name']: item['total_quantity'] or 0 for item in data}
+        return Response(result)
+
+
+    @action(detail=False, methods=['get'])
+    def status(self, request):
+        """
+        Возвращает список материалов с их минимальным и максимальным количеством,
+        ограниченный материалами, участвующими в заключённых договорах.
+        Формат: [{"name": str, "min_quantity": float, "max_quantity": float}, ...]
+        """
+        # Получаем id материалов, которые есть в заключённых договорах
+        concluded_contract_ids = Concluded.objects.values_list('id_contract', flat=True)
+        material_ids = MaterialsInContract.objects.filter(
+            id_contract_id__in=concluded_contract_ids
+        ).values_list('id_materials', flat=True).distinct()
+
+        # Выбираем материалы с их min/max
+        materials = Materials.objects.filter(id_materials__in=material_ids).only(
+            'name', 'min_quantity', 'max_quantity'
+        )
+        result = [
+            {
+                'name': m.name,
+                'min_quantity': m.min_quantity,
+                'max_quantity': m.max_quantity,
+            }
+            for m in materials
+        ]
+        return Response(result)
 
     @action(detail=False, methods=['get'])
     def analysis(self, request):
