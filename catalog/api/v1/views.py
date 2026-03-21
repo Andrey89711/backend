@@ -2,7 +2,7 @@ from rest_framework import viewsets, filters
 from catalog.models import Materials, Prices
 from .serializers import MaterialsSerializer, PricesSerializer
 from django.utils import timezone
-from django.db.models import OuterRef, Subquery, Sum, Q, Min
+from django.db.models import Sum, Q
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from datetime import datetime
@@ -78,13 +78,22 @@ class PricesViewSet(viewsets.ModelViewSet):
             return Response({"error": "Неверный формат даты"}, status=400)
 
         # Выбираем последние записи цен для каждого сочетания Материал+Поставщик
-        latest_ids = Prices.objects.filter(
-            id_materials=OuterRef('id_materials'),
-            id_supplier=OuterRef('id_supplier'),
+        # Используем list() и .first() для совместимости с MySQL без LIMIT в subquery
+        query = Prices.objects.values('id_materials', 'id_supplier').filter(
             effective_dates__lte=target_date
-        ).order_by('-effective_dates', '-id_prices').values('id_prices')[:1]
+        ).distinct()
+        
+        latest_ids = []
+        for material_supplier in query:
+            latest = Prices.objects.filter(
+                id_materials=material_supplier['id_materials'],
+                id_supplier=material_supplier['id_supplier'],
+                effective_dates__lte=target_date
+            ).order_by('-effective_dates', '-id_prices').values_list('id_prices', flat=True).first()
+            if latest:
+                latest_ids.append(latest)
 
-        queryset = Prices.objects.filter(id_prices__in=Subquery(latest_ids))
+        queryset = Prices.objects.filter(id_prices__in=latest_ids)
         serializer = self.get_serializer(queryset, many=True)
         return Response(serializer.data)
 
@@ -101,15 +110,20 @@ class PricesViewSet(viewsets.ModelViewSet):
             return Response({"error": "Неверный формат даты"}, status=400)
 
         # Получаем актуальный срез: последняя цена на каждое сочетание материал+поставщик
-        actual_ids = Prices.objects.filter(
-            id_materials=OuterRef('id_materials'),
-            id_supplier=OuterRef('id_supplier'),
+        # Используем queryset.values_list() и list() для совместимости с MySQL без LIMIT в subquery
+        query = Prices.objects.values('id_materials', 'id_supplier').filter(
             effective_dates__lte=target_date
-        ).order_by('-effective_dates', '-id_prices').values('id_prices')[:1]
-
-        actual_prices = list(Prices.objects.filter(
-            id_prices__in=Subquery(actual_ids)
-        ).select_related('id_materials', 'id_supplier'))
+        ).distinct()
+        
+        actual_prices = []
+        for material_supplier in query:
+            latest = Prices.objects.filter(
+                id_materials=material_supplier['id_materials'],
+                id_supplier=material_supplier['id_supplier'],
+                effective_dates__lte=target_date
+            ).order_by('-effective_dates', '-id_prices').first()
+            if latest:
+                actual_prices.append(latest)
 
         if not actual_prices:
             return Response([])
@@ -144,13 +158,22 @@ class PricesViewSet(viewsets.ModelViewSet):
 
         # Выбираем последние записи цен для каждого материала, 
         # но только для указанного поставщика
-        latest_ids = Prices.objects.filter(
-            id_materials=OuterRef('id_materials'),
+        materials_query = Prices.objects.values('id_materials').filter(
             id_supplier=supplier_id,
             effective_dates__lte=target_date
-        ).order_by('-effective_dates', '-id_prices').values('id_prices')[:1]
+        ).distinct()
+        
+        latest_ids = []
+        for material in materials_query:
+            latest = Prices.objects.filter(
+                id_materials=material['id_materials'],
+                id_supplier=supplier_id,
+                effective_dates__lte=target_date
+            ).order_by('-effective_dates', '-id_prices').values_list('id_prices', flat=True).first()
+            if latest:
+                latest_ids.append(latest)
 
-        queryset = Prices.objects.filter(id_prices__in=Subquery(latest_ids))
+        queryset = Prices.objects.filter(id_prices__in=latest_ids)
         
         serializer = self.get_serializer(queryset, many=True)
         return Response(serializer.data)

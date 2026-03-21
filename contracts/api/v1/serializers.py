@@ -38,7 +38,7 @@ class ConcludedSerializer(serializers.ModelSerializer):
             'id_director', 'director_name',
             'materials',
         ]
-        read_only_fields = ['id_contract']
+        read_only_fields = ['materials', 'computed_cost', 'cost_formatted']
 
     def get_computed_cost(self, obj):
         total = sum(
