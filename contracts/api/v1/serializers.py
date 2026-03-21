@@ -84,3 +84,88 @@ class ContractSerializer(serializers.ModelSerializer):
         request = self.context.get('request')
         url = f'/api/contracts/{obj.id_contract}/file/download/?inline=true'
         return request.build_absolute_uri(url) if request else url
+
+class ActOfDivergenceItemSerializer(serializers.Serializer):
+    name       = serializers.CharField()
+    series     = serializers.CharField(default='', allow_blank=True)
+    unit       = serializers.CharField(default='шт')
+    price      = serializers.DecimalField(max_digits=12, decimal_places=2, default=0)
+    qty_doc    = serializers.DecimalField(max_digits=12, decimal_places=3, default=0)
+    sum_doc    = serializers.DecimalField(max_digits=14, decimal_places=2, default=0)
+    qty_actual = serializers.DecimalField(max_digits=12, decimal_places=3, default=0)
+    sum_actual = serializers.DecimalField(max_digits=14, decimal_places=2, default=0)
+
+
+class ActOfDivergenceSerializer(serializers.Serializer):
+    organization_name    = serializers.CharField()
+    organization_address = serializers.CharField()
+    act_date  = serializers.DateField()
+    act_place = serializers.CharField()
+    reception_start_hour = serializers.CharField()
+    reception_start_min  = serializers.CharField(default='00', allow_blank=True)
+    reception_end_hour   = serializers.CharField()
+    reception_end_min    = serializers.CharField(default='00', allow_blank=True)
+    commission_members   = serializers.CharField()
+    commission_signature = serializers.CharField(default='', allow_blank=True)
+    representative_name  = serializers.CharField()
+    certificate_number   = serializers.CharField(default='', allow_blank=True)
+    certificate_date     = serializers.DateField(required=False, allow_null=True)
+    sender_name  = serializers.CharField()
+    carrier_name = serializers.CharField(default='', allow_blank=True)
+    contract_number = serializers.CharField()
+    contract_date   = serializers.DateField()
+    invoice_number  = serializers.CharField()
+    invoice_date    = serializers.DateField()
+    sign_date = serializers.DateField(required=False, allow_null=True)
+    sign_name = serializers.CharField(default='', allow_blank=True)
+    items = ActOfDivergenceItemSerializer(many=True)
+
+    def to_docx_context(self) -> dict:
+        d = self.validated_data
+
+        def fmt_date(value):
+            if not value:
+                return '___'
+            from datetime import date
+            if isinstance(value, date):
+                return value.strftime('%d.%m.%Y')
+            return str(value)
+
+        items = [
+            {
+                'name':       item['name'],
+                'series':     item.get('series', ''),
+                'unit':       item.get('unit', 'шт'),
+                'price':      str(item.get('price', '')),
+                'qty_doc':    str(item.get('qty_doc', '')),
+                'sum_doc':    str(item.get('sum_doc', '')),
+                'qty_actual': str(item.get('qty_actual', '')),
+                'sum_actual': str(item.get('sum_actual', '')),
+            }
+            for item in d['items']
+        ]
+
+        return {
+            'organization_name':    d['organization_name'],
+            'organization_address': d['organization_address'],
+            'act_date':             fmt_date(d['act_date']),
+            'act_place':            d['act_place'],
+            'reception_start_hour': d['reception_start_hour'],
+            'reception_start_min':  d.get('reception_start_min', '00'),
+            'reception_end_hour':   d['reception_end_hour'],
+            'reception_end_min':    d.get('reception_end_min', '00'),
+            'commission_members':   d['commission_members'],
+            'commission_signature': d.get('commission_signature', ''),
+            'representative_name':  d['representative_name'],
+            'certificate_number':   d.get('certificate_number', ''),
+            'certificate_date':     fmt_date(d.get('certificate_date')),
+            'sender_name':          d['sender_name'],
+            'carrier_name':         d.get('carrier_name', ''),
+            'contract_number':      d['contract_number'],
+            'contract_date':        fmt_date(d['contract_date']),
+            'invoice_number':       d['invoice_number'],
+            'invoice_date':         fmt_date(d['invoice_date']),
+            'sign_date':            fmt_date(d.get('sign_date')),
+            'sign_name':            d.get('sign_name', ''),
+            'items':                items,
+        }
