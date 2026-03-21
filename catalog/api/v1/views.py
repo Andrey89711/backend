@@ -36,6 +36,33 @@ class MaterialsViewSet(viewsets.ModelViewSet):
 
 
     @action(detail=False, methods=['get'])
+    def status(self, request):
+        """
+        Возвращает список материалов с их минимальным и максимальным количеством,
+        ограниченный материалами, участвующими в заключённых договорах.
+        Формат: [{"name": str, "min_quantity": float, "max_quantity": float}, ...]
+        """
+        # Получаем id материалов, которые есть в заключённых договорах
+        concluded_contract_ids = Concluded.objects.values_list('id_contract', flat=True)
+        material_ids = MaterialsInContract.objects.filter(
+            id_contract_id__in=concluded_contract_ids
+        ).values_list('id_materials', flat=True).distinct()
+
+        # Выбираем материалы с их min/max
+        materials = Materials.objects.filter(id_materials__in=material_ids).only(
+            'name', 'min_quantity', 'max_quantity'
+        )
+        result = [
+            {
+                'name': m.name,
+                'min_quantity': m.min_quantity,
+                'max_quantity': m.max_quantity,
+            }
+            for m in materials
+        ]
+        return Response(result)
+
+    @action(detail=False, methods=['get'])
     def analysis(self, request):
         """
         Возвращает материалы с заданным min/max количеством и фактическим остатком.
