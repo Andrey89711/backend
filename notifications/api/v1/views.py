@@ -27,7 +27,7 @@ def _check_payment_notifications(user):
                 user,
                 f"Просрочен платёж по договору #{c.id_contract_id} (был {c.payment_date})",
                 'danger',
-                '/main-actions'
+                '/agreement?tab=statuses'
             )
 
     # Скоро истекают (≤3 дней)
@@ -43,7 +43,7 @@ def _check_payment_notifications(user):
                 user,
                 f"Срок оплаты договора #{c.id_contract_id} истекает {c.payment_date}",
                 'warning',
-                '/main-actions'
+                '/agreement?tab=statuses'
             )
 
 
