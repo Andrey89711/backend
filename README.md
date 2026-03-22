@@ -8,7 +8,7 @@ Backend-часть проекта на Django/DRF с JWT-аутентифика�
 - Django 6
 - Django REST Framework
 - Simple JWT
-- MySQL
+- Postgre
 - drf-spectacular (Swagger/OpenAPI)
 - django-cors-headers
 
