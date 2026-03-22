@@ -277,6 +277,16 @@ class ContractDocumentViewSet(viewsets.ViewSet):
             convert_docx_to_pdf(temp_docx, output_pdf)
             contract = Contract.objects.create(file_path=f"{self.STORAGE_DIR_NAME}/{pdf_filename}")
             temp_docx.unlink(missing_ok=True)
+            try:
+                from notifications.utils import create_notification_for_role
+                create_notification_for_role(
+                    'manager',
+                    f"Создан документ договора #{contract.id_contract}",
+                    'info',
+                    '/agreement?tab=view',
+                )
+            except Exception as ne:
+                logger.warning(f"Ошибка отправки уведомления: {ne}")
             return Response({
                 "status": "success",
                 "contract_id": contract.id_contract,
@@ -390,6 +400,16 @@ class ContractDocumentViewSet(viewsets.ViewSet):
             contract = Contract.objects.create(file_path=f"{self.STORAGE_DIR_NAME}/{saved_filename}")
             for path in [tmp_path, pdf_path]:
                 path.unlink(missing_ok=True)
+            try:
+                from notifications.utils import create_notification_for_role
+                create_notification_for_role(
+                    'manager',
+                    f"Создан документ договора #{contract.id_contract}",
+                    'info',
+                    '/agreement?tab=view',
+                )
+            except Exception as ne:
+                logger.warning(f"Ошибка отправки уведомления: {ne}")
             return Response({
                 "status": "success",
                 "message": "Файл успешно сохранён",

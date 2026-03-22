@@ -52,7 +52,8 @@ class NotificationViewSet(viewsets.ReadOnlyModelViewSet):
 
     def get_queryset(self):
         _check_payment_notifications(self.request.user)
-        return Notification.objects.filter(user=self.request.user).order_by('is_read', '-created_at')
+        # Убран фильтер по пользователю .filter(user=self.request.user)
+        return Notification.objects.order_by('is_read', '-created_at')
 
     @action(detail=True, methods=['post'])
     def mark_read(self, request, pk=None):
