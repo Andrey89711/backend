@@ -1,4 +1,5 @@
-﻿import logging
+import logging
+import re
 import tempfile
 import uuid
 from datetime import timedelta
@@ -18,7 +19,11 @@ from drf_spectacular.utils import extend_schema
 
 from contracts.models import Concluded, Contract, MaterialsInContract
 from contracts.services.documents import PdfDocumentService, generate_contract_pdf
-from contracts.services.pricing import PriceResolutionError, resolve_unit_price_for_material
+from contracts.services.pricing import (
+    PriceResolutionError,
+    is_material_available_for_supplier,
+    resolve_unit_price_for_material,
+)
 from contracts.utils.docx_to_pdf import convert_docx_to_pdf
 from .serializers import (
     ConcludedSerializer,
@@ -29,6 +34,98 @@ from .serializers import (
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
+def _camel_to_snake(name: str) -> str:
+    s1 = re.sub(r'(.)([A-Z][a-z]+)', r'\1_\2', name)
+    return re.sub(r'([a-z0-9])([A-Z])', r'\1_\2', s1).lower()
+
+
+def _normalize_template_payload(data):
+    """
+    Normalize client payload keys to snake_case and keep backward-compatible aliases.
+    """
+    aliases = {
+        'contract_number': ['contractnumber'],
+        'contract_date': ['contractdate'],
+        'buyer_name': ['buyername'],
+        'buyer_director': ['buyerdirector'],
+        'buyer_basis': ['buyerbasis'],
+        'supplier_name': ['suppliername'],
+        'supplier_full_name': ['supplierfullname'],
+        'supplier_short_name': ['suppliershortname'],
+        'supplier_inn': ['supplierinn'],
+        'supplier_address': ['supplieraddress'],
+        'supplier_director': ['supplierdirector'],
+        'supplier_director_position': ['supplierdirectorposition'],
+        'supplier_basis': ['supplierbasis'],
+        'invoice_number': ['invoicenumber'],
+        'place_of_contract': ['placeofcontract'],
+        'current_date': ['currentdate'],
+        'delivery_frequency': ['deliveryfrequency'],
+        'delivery_frequency_custom': ['deliveryfrequencycustom'],
+        'delivery_schedule': ['deliveryschedule'],
+        'transport_type': ['transporttype'],
+        'payment_term': ['paymentterm'],
+        'penalty_shortage': ['penaltyshortage'],
+        'penalty_late_payment': ['penaltylatepayment'],
+        'contract_end_date': ['contractenddate'],
+        'renewal_term': ['renewalterm'],
+        'price_without_vat': ['pricewithoutvat'],
+        'price_with_vat': ['pricewithvat'],
+        'total_amount': ['totalamount'],
+        'total_amount_words': ['totalamountwords'],
+        'total_quantity': ['totalquantity'],
+        'qty_doc': ['qtydoc'],
+        'sum_doc': ['sumdoc'],
+        'qty_actual': ['qtyactual'],
+        'sum_actual': ['sumactual'],
+        'organization_name': ['organizationname'],
+        'organization_address': ['organizationaddress'],
+        'act_date': ['actdate'],
+        'act_place': ['actplace'],
+        'commission_members': ['commissionmembers'],
+        'representative_name': ['representativename'],
+        'certificate_number': ['certificatenumber'],
+        'certificate_date': ['certificatedate'],
+        'sender_name': ['sendername'],
+        'carrier_name': ['carriername'],
+        'invoice_date': ['invoicedate'],
+        'sign_date': ['signdate'],
+        'sign_name': ['signname'],
+    }
+
+    if isinstance(data, dict):
+        normalized = {}
+        for key, value in data.items():
+            snake_key = _camel_to_snake(key)
+            normalized[snake_key] = _normalize_template_payload(value)
+        # add aliases for templates that still use old placeholders
+        lower_keys_map = {k.lower().replace('_', ''): k for k in normalized.keys()}
+        for canonical, alias_keys in aliases.items():
+            if canonical in normalized:
+                continue
+            for alias in alias_keys:
+                source_key = lower_keys_map.get(alias)
+                if source_key:
+                    normalized[canonical] = normalized[source_key]
+                    break
+        return normalized
+    if isinstance(data, list):
+        return [_normalize_template_payload(item) for item in data]
+    return data
+
+
+def _summarize_context(data):
+    summary = {}
+    for key, value in (data or {}).items():
+        if isinstance(value, list):
+            summary[key] = {'type': 'list', 'size': len(value)}
+        elif isinstance(value, dict):
+            summary[key] = {'type': 'dict', 'keys': sorted(value.keys())}
+        else:
+            summary[key] = type(value).__name__
+    return summary
+
+
 
 
 def _recalc_cost(concluded):
@@ -316,6 +413,14 @@ class MaterialsInContractViewSet(ModelViewSet):
         contract = serializer.validated_data['id_contract']
         material = serializer.validated_data['id_materials']
         incoming_price = serializer.validated_data.get('unit_price')
+        if not is_material_available_for_supplier(contract, material.id_materials):
+            supplier_name = contract.concluded.id_supplier.name if hasattr(contract, 'concluded') else None
+            raise PriceResolutionError({
+                'id_materials': (
+                    f"Материал недоступен у поставщика '{supplier_name}'. "
+                    "Выберите материал с ценой у поставщика договора."
+                )
+            })
 
         try:
             unit_price = resolve_unit_price_for_material(
@@ -338,6 +443,14 @@ class MaterialsInContractViewSet(ModelViewSet):
         contract = serializer.validated_data.get('id_contract', instance.id_contract)
         material = serializer.validated_data.get('id_materials', instance.id_materials)
         incoming_price = serializer.validated_data.get('unit_price', instance.unit_price)
+        if not is_material_available_for_supplier(contract, material.id_materials):
+            supplier_name = contract.concluded.id_supplier.name if hasattr(contract, 'concluded') else None
+            raise PriceResolutionError({
+                'id_materials': (
+                    f"Материал недоступен у поставщика '{supplier_name}'. "
+                    "Выберите материал с ценой у поставщика договора."
+                )
+            })
 
         if incoming_price is None or incoming_price <= 0:
             unit_price = resolve_unit_price_for_material(
@@ -466,7 +579,7 @@ class ContractDocumentViewSet(viewsets.ViewSet):
     @action(detail=False, methods=['post'], url_path='generate-docx')
     def generate_docx(self, request):
         template_name = request.data.get('template')
-        data = request.data.get('data', {})
+        data = _normalize_template_payload(request.data.get('data', {}))
         if not template_name:
             return Response({"error": "Параметр 'template' обязателен"}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -475,6 +588,11 @@ class ContractDocumentViewSet(viewsets.ViewSet):
             return Response({"error": f"Шаблон '{template_name}' не найден"}, status=status.HTTP_404_NOT_FOUND)
 
         try:
+            logger.debug(
+                "Generate DOCX template='%s' context metadata=%s",
+                template_name,
+                _summarize_context(data),
+            )
             doc = DocxTemplate(str(template_path))
             doc.render(data)
             with tempfile.NamedTemporaryFile(suffix='.docx', delete=False) as tmp:
@@ -498,7 +616,7 @@ class ContractDocumentViewSet(viewsets.ViewSet):
     @action(detail=False, methods=['post'], url_path='generate-pdf')
     def generate_pdf(self, request):
         template_name = request.data.get('template')
-        data = request.data.get('data', {})
+        data = _normalize_template_payload(request.data.get('data', {}))
         if not template_name:
             return Response({"error": "Параметр 'template' обязателен"}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -507,6 +625,11 @@ class ContractDocumentViewSet(viewsets.ViewSet):
             return Response({"error": f"Шаблон '{template_name}' не найден"}, status=status.HTTP_404_NOT_FOUND)
 
         try:
+            logger.debug(
+                "Generate PDF template='%s' context metadata=%s",
+                template_name,
+                _summarize_context(data),
+            )
             generated = PdfDocumentService.generate_pdf(
                 template_name=template_name,
                 context=data,

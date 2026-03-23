@@ -101,6 +101,39 @@ class MaterialsViewSet(viewsets.ModelViewSet):
             })
         return Response(result)
 
+    @action(detail=False, methods=['get'])
+    def by_supplier(self, request):
+        """
+        Возвращает материалы, у которых есть цена у supplier_id на указанную дату.
+        Параметры: ?supplier_id=1&date=YYYY-MM-DD (date опционален).
+        """
+        supplier_id = request.query_params.get('supplier_id')
+        if not supplier_id:
+            return Response({"error": "Необходимо указать supplier_id"}, status=400)
+
+        date_param = request.query_params.get('date')
+        if date_param:
+            try:
+                target_date = datetime.strptime(date_param, '%Y-%m-%d').date()
+            except ValueError:
+                return Response({"error": "Неверный формат даты. Используйте YYYY-MM-DD"}, status=400)
+        else:
+            target_date = timezone.now().date()
+
+        material_ids = Prices.objects.filter(
+            id_supplier_id=supplier_id,
+            effective_dates__lte=target_date,
+        ).values_list('id_materials_id', flat=True).distinct()
+
+        if not material_ids:
+            material_ids = Prices.objects.filter(
+                id_supplier_id=supplier_id,
+            ).values_list('id_materials_id', flat=True).distinct()
+
+        queryset = Materials.objects.filter(id_materials__in=material_ids).order_by('name')
+        serializer = self.get_serializer(queryset, many=True)
+        return Response(serializer.data)
+
 class PricesViewSet(viewsets.ModelViewSet):
     queryset = Prices.objects.all()
     serializer_class = PricesSerializer

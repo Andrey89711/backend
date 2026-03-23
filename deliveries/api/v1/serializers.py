@@ -1,4 +1,4 @@
-﻿from rest_framework import serializers
+from rest_framework import serializers
 
 from deliveries.models import AcceptanceOfDelivery, ActOfArrival, Delivery
 from contracts.models import Contract, MaterialsInContract
@@ -70,6 +70,7 @@ class ReceivingItemSerializer(serializers.Serializer):
 
 
 class StartReceivingRequestSerializer(serializers.Serializer):
+    storekeeper_id = serializers.IntegerField(required=False, allow_null=True)
     items = ReceivingItemSerializer(many=True, required=False, default=list)
 
 

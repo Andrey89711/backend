@@ -1,4 +1,4 @@
-﻿"""Автотесты для приложения deliveries.
+"""Автотесты для приложения deliveries.
 Запуск: python manage.py test deliveries --settings=config.test_settings -v 2
 """
 
@@ -106,6 +106,31 @@ class ActOfArrivalFlowTests(TestCase):
         self.assertIn('actual_quantity', item)
         self.assertIn('condition', item)
         self.assertIn('unit_price', item)
+
+    def test_start_receiving_accepts_storekeeper_and_saves_items(self):
+        _, act, delivery = self._create_contract_bundle(status_value=Contract.STATUS_SIGNED)
+        payload = {
+            'storekeeper_id': self.storekeeper.id_storekeeper,
+            'items': [
+                {
+                    'material_id': self.material.id_materials,
+                    'actual_quantity': 95,
+                    'condition': 'хорошее',
+                }
+            ],
+        }
+        resp = self.client.post(
+            f'/api/deliveries/acts-of-arrival/{act.id_act_of_arrival}/start_receiving/',
+            payload,
+            format='json',
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        act.refresh_from_db()
+        self.assertEqual(act.status, DeliveryStatus.RECEIVING)
+
+        mic = MaterialsInContract.objects.get(id_contract=delivery.id_contract, id_materials=self.material)
+        self.assertEqual(mic.actual_quantity, 95)
+        self.assertEqual(mic.condition, 'хорошее')
 
     @patch('deliveries.api.v1.views.generate_arrival_pdf')
     @patch('deliveries.api.v1.views.generate_divergence_pdf')

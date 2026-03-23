@@ -1,4 +1,5 @@
-﻿import tempfile
+import logging
+import tempfile
 import uuid
 from dataclasses import dataclass
 from pathlib import Path
@@ -9,6 +10,21 @@ from django.utils import timezone
 
 from contracts.models import Contract, MaterialsInContract
 from contracts.utils.docx_to_pdf import convert_docx_to_pdf
+
+logger = logging.getLogger(__name__)
+
+
+def _summarize_context(context: dict) -> dict:
+    """Return safe context metadata for debug logs (no values)."""
+    summary = {}
+    for key, value in (context or {}).items():
+        if isinstance(value, (list, tuple, set)):
+            summary[key] = {'type': type(value).__name__, 'size': len(value)}
+        elif isinstance(value, dict):
+            summary[key] = {'type': 'dict', 'keys': sorted(value.keys())}
+        else:
+            summary[key] = type(value).__name__
+    return summary
 
 
 @dataclass
@@ -39,6 +55,11 @@ class PdfDocumentService:
         if not template_path.exists():
             raise FileNotFoundError(f"Template not found: {template_name}")
 
+        logger.debug(
+            "Rendering template '%s' with context metadata: %s",
+            template_name,
+            _summarize_context(context),
+        )
         doc = DocxTemplate(str(template_path))
         doc.render(context)
 

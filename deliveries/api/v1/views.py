@@ -1,4 +1,4 @@
-﻿import logging
+import logging
 from datetime import timedelta
 
 from django.db.models import Count, Sum
@@ -239,11 +239,21 @@ class ActOfArrivalViewSet(viewsets.ModelViewSet):
         if err:
             return err
 
-        items = request.data.get('items', [])
+        serializer = StartReceivingRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        payload = serializer.validated_data
+        items = payload.get('items', [])
+        storekeeper_id = payload.get('storekeeper_id')
         try:
             self._save_items(delivery, items)
         except ValueError as exc:
             return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
+        if storekeeper_id:
+            AcceptanceOfDelivery.objects.get_or_create(
+                id_storekeeper_id=storekeeper_id,
+                id_act_of_arrival=act,
+            )
 
         act.status = DeliveryStatus.RECEIVING
         act.save(update_fields=['status'])

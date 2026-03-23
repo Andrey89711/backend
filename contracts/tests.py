@@ -1,4 +1,4 @@
-﻿"""Автотесты для приложения contracts.
+"""Автотесты для приложения contracts.
 Запуск: python manage.py test contracts --settings=config.test_settings -v 2
 """
 
@@ -121,7 +121,7 @@ class MaterialsAutoPriceTests(TestCase):
         self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
         self.assertEqual(float(resp.data['unit_price']), 125.5)
 
-    def test_autofill_fallback_latest_price(self):
+    def test_reject_material_without_supplier_price(self):
         other_supplier = make_supplier()
         Prices.objects.create(
             id_materials=self.material,
@@ -136,8 +136,8 @@ class MaterialsAutoPriceTests(TestCase):
             'materials_quality_in_contract': 5,
         }, format='json')
 
-        self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
-        self.assertEqual(float(resp.data['unit_price']), 110.0)
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('id_materials', resp.data)
 
     def test_error_when_price_missing(self):
         resp = self.client.post('/api/contracts/materials/', {
@@ -147,7 +147,7 @@ class MaterialsAutoPriceTests(TestCase):
         }, format='json')
 
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn('unit_price', resp.data)
+        self.assertTrue('unit_price' in resp.data or 'id_materials' in resp.data)
 
 
 class ContractPdfGenerationTests(TestCase):
@@ -182,3 +182,64 @@ class ContractPdfGenerationTests(TestCase):
         contract.refresh_from_db()
         self.assertEqual(contract.file_path, 'contracts_docs/mock_contract_updated.pdf')
         mock_generate_pdf.assert_called_once()
+
+    @patch('contracts.api.v1.views.DocxTemplate')
+    @patch('contracts.api.v1.views.Path.exists', return_value=True)
+    def test_generate_docx_normalizes_camelcase_payload_keys(self, _mock_exists, mock_docx_template):
+        doc_instance = mock_docx_template.return_value
+        doc_instance.render.return_value = None
+        doc_instance.save.return_value = None
+
+        payload = {
+            'template': 'supply_contract_template.docx',
+            'data': {
+                'contractNumber': '123',
+                'supplierName': 'ТестПоставщик',
+                'items': [{'qtyActual': 5}],
+            },
+        }
+        response = self.client.post('/api/contracts/documents/generate-docx/', payload, format='json')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        args, _kwargs = doc_instance.render.call_args
+        rendered_context = args[0]
+        self.assertIn('contract_number', rendered_context)
+        self.assertIn('supplier_name', rendered_context)
+        self.assertEqual(rendered_context['items'][0]['qty_actual'], 5)
+
+
+class CatalogMaterialsBySupplierTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.user = make_user()
+        self.client.force_authenticate(user=self.user)
+        self.supplier = make_supplier()
+        self.other_supplier = make_supplier()
+        self.material_for_supplier = Materials.objects.create(
+            name='Песок',
+            unit_of_measurement='кг',
+            description='desc',
+        )
+        self.material_other = Materials.objects.create(
+            name='Щебень',
+            unit_of_measurement='кг',
+            description='desc',
+        )
+        Prices.objects.create(
+            id_materials=self.material_for_supplier,
+            id_supplier=self.supplier,
+            effective_dates=timezone.now().date(),
+            price=10,
+        )
+        Prices.objects.create(
+            id_materials=self.material_other,
+            id_supplier=self.other_supplier,
+            effective_dates=timezone.now().date(),
+            price=20,
+        )
+
+    def test_materials_filtered_by_supplier(self):
+        resp = self.client.get(f'/api/catalog/materials/by_supplier/?supplier_id={self.supplier.id_supplier}')
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        ids = {item['id_materials'] for item in resp.data}
+        self.assertIn(self.material_for_supplier.id_materials, ids)
+        self.assertNotIn(self.material_other.id_materials, ids)
