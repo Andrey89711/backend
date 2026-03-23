@@ -1,9 +1,9 @@
-import os
-import uuid
-import logging
-from pathlib import Path
-from datetime import timedelta
+﻿import logging
 import tempfile
+import uuid
+from datetime import timedelta
+from pathlib import Path
+
 from docxtpl import DocxTemplate
 from django.conf import settings
 from django.http import FileResponse, HttpResponse
@@ -14,9 +14,18 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.viewsets import ModelViewSet
 from rest_framework_simplejwt.tokens import AccessToken
-from ...models import Concluded, Contract, MaterialsInContract
-from .serializers import ConcludedSerializer, ContractSerializer, MaterialsInContractSerializer
-from ...utils.docx_to_pdf import convert_docx_to_pdf
+from drf_spectacular.utils import extend_schema
+
+from contracts.models import Concluded, Contract, MaterialsInContract
+from contracts.services.documents import PdfDocumentService, generate_contract_pdf
+from contracts.services.pricing import PriceResolutionError, resolve_unit_price_for_material
+from contracts.utils.docx_to_pdf import convert_docx_to_pdf
+from .serializers import (
+    ConcludedSerializer,
+    ContractSerializer,
+    MaterialsInContractSerializer,
+    SetContractStatusSerializer,
+)
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -34,9 +43,22 @@ def _recalc_cost(concluded):
 
 
 def _create_delivery_and_act(concluded):
-    """Автоматически создаёт Delivery + ActOfArrival при создании Concluded."""
+    """Создаёт Delivery + ActOfArrival только для подписанного договора."""
     from deliveries.models import ActOfArrival, Delivery
     from deliveries.choices import DeliveryStatus
+
+    contract = concluded.id_contract
+    if contract.status != Contract.STATUS_SIGNED:
+        logger.info(
+            "Доставка не создана: договор #%s в статусе '%s' (нужен '%s').",
+            contract.id_contract,
+            contract.status,
+            Contract.STATUS_SIGNED,
+        )
+        return None
+
+    if Delivery.objects.filter(id_contract=contract).exists():
+        return Delivery.objects.filter(id_contract=contract).first().id_act_of_arrival
 
     delivery_date = concluded.delivery_date or concluded.payment_date
 
@@ -44,13 +66,29 @@ def _create_delivery_and_act(concluded):
     Delivery.objects.create(
         status=DeliveryStatus.IN_TRANSIT,
         delivery_date=delivery_date,
-        id_contract=concluded.id_contract,
+        id_contract=contract,
         id_act_of_arrival=act,
     )
     logger.info(
-        f"Авто-создан ActOfArrival #{act.pk} и Delivery для договора #{concluded.id_contract_id}"
+        "Авто-создан ActOfArrival #%s и Delivery для договора #%s",
+        act.pk,
+        concluded.id_contract_id,
     )
     return act
+
+
+def _ensure_delivery_created_for_signed_contract(contract: Contract):
+    """Создает delivery/act при переходе договора в signed (если есть concluded и еще нет доставки)."""
+    if contract.status != Contract.STATUS_SIGNED:
+        return
+    if not hasattr(contract, 'concluded'):
+        return
+
+    from deliveries.models import Delivery
+
+    if Delivery.objects.filter(id_contract=contract).exists():
+        return
+    _create_delivery_and_act(contract.concluded)
 
 
 class ConcludedViewSet(ModelViewSet):
@@ -62,9 +100,7 @@ class ConcludedViewSet(ModelViewSet):
 
     def perform_create(self, serializer):
         concluded = serializer.save()
-        # Автоматически создаём Delivery + ActOfArrival
         _create_delivery_and_act(concluded)
-        # Уведомление менеджеру
         try:
             from notifications.utils import create_notification_for_role
             create_notification_for_role(
@@ -86,7 +122,6 @@ class ConcludedViewSet(ModelViewSet):
         concluded.is_paid = True
         concluded.save(update_fields=['is_paid'])
 
-        # Списываем с баланса предприятия
         try:
             from finance.models import EnterpriseBalance
             balance = EnterpriseBalance.objects.first()
@@ -140,19 +175,86 @@ class ContractViewSet(ModelViewSet):
     queryset = Contract.objects.all()
     serializer_class = ContractSerializer
 
+    def perform_create(self, serializer):
+        contract = serializer.save()
+        self._generate_contract_pdf(contract)
+
+    def perform_update(self, serializer):
+        contract = serializer.save()
+        self._generate_contract_pdf(contract)
+
+    def _generate_contract_pdf(self, contract: Contract):
+        try:
+            generated = generate_contract_pdf(contract)
+            contract.file_path = generated.relative_path
+            contract.save(update_fields=['file_path'])
+        except Exception as exc:
+            logger.error(
+                "Ошибка автогенерации PDF договора #%s: %s",
+                contract.id_contract,
+                exc,
+                exc_info=True,
+            )
+
     @action(detail=True, methods=['post'], url_path='set-status')
+    @extend_schema(
+        request=SetContractStatusSerializer,
+        description='Смена статуса договора по допустимому workflow: created -> approved -> signed -> annulled.'
+    )
     def set_status(self, request, pk=None):
         contract = self.get_object()
         new_status = request.data.get('status')
-        allowed = ['draft', 'review', 'active', 'closed']
+        allowed = [status for status, _ in Contract.STATUS_CHOICES]
+
         if new_status not in allowed:
             return Response(
                 {'error': 'Недопустимый статус. Допустимые: ' + ', '.join(allowed)},
                 status=status.HTTP_400_BAD_REQUEST
             )
+
+        if contract.status == new_status:
+            return Response({
+                'id_contract': contract.id_contract,
+                'status': contract.status,
+                'available_next_statuses': contract.get_available_next_statuses(),
+            })
+
+        if not contract.can_transition_to(new_status):
+            return Response(
+                {
+                    'error': (
+                        f"Недопустимый переход статуса: '{contract.status}' -> '{new_status}'. "
+                        f"Разрешены только: {', '.join(contract.get_available_next_statuses()) or 'нет'}"
+                    )
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
         contract.status = new_status
-        contract.save()
-        return Response({'id_contract': contract.id_contract, 'status': contract.status})
+        contract.save(update_fields=['status'])
+
+        if new_status == Contract.STATUS_SIGNED:
+            _ensure_delivery_created_for_signed_contract(contract)
+
+        if new_status == Contract.STATUS_ANNULLED:
+            logger.info("Договор #%s переведен в 'annulled' (заглушка обработки).", contract.id_contract)
+            try:
+                from notifications.utils import create_notification_for_role
+
+                create_notification_for_role(
+                    'manager',
+                    f"Договор #{contract.id_contract} переведен в статус annulled (заглушка).",
+                    'warning',
+                    '/agreement?tab=view',
+                )
+            except Exception as exc:
+                logger.warning(f"Не удалось отправить уведомление об annulled: {exc}")
+
+        return Response({
+            'id_contract': contract.id_contract,
+            'status': contract.status,
+            'available_next_statuses': contract.get_available_next_statuses(),
+        })
 
     @action(detail=True, methods=['get'])
     def materials_summary(self, request, pk=None):
@@ -211,8 +313,20 @@ class MaterialsInContractViewSet(ModelViewSet):
     serializer_class = MaterialsInContractSerializer
 
     def perform_create(self, serializer):
-        instance = serializer.save()
-        # Пересчитываем стоимость договора
+        contract = serializer.validated_data['id_contract']
+        material = serializer.validated_data['id_materials']
+        incoming_price = serializer.validated_data.get('unit_price')
+
+        try:
+            unit_price = resolve_unit_price_for_material(
+                contract=contract,
+                material_id=material.id_materials,
+                unit_price=incoming_price,
+            )
+        except PriceResolutionError as exc:
+            raise exc
+
+        instance = serializer.save(unit_price=unit_price)
         try:
             concluded = instance.id_contract.concluded
             _recalc_cost(concluded)
@@ -220,9 +334,23 @@ class MaterialsInContractViewSet(ModelViewSet):
             pass
 
     def perform_update(self, serializer):
-        instance = serializer.save()
+        instance = serializer.instance
+        contract = serializer.validated_data.get('id_contract', instance.id_contract)
+        material = serializer.validated_data.get('id_materials', instance.id_materials)
+        incoming_price = serializer.validated_data.get('unit_price', instance.unit_price)
+
+        if incoming_price is None or incoming_price <= 0:
+            unit_price = resolve_unit_price_for_material(
+                contract=contract,
+                material_id=material.id_materials,
+                unit_price=None,
+            )
+        else:
+            unit_price = round(float(incoming_price), 2)
+
+        updated = serializer.save(unit_price=unit_price)
         try:
-            concluded = instance.id_contract.concluded
+            concluded = updated.id_contract.concluded
             _recalc_cost(concluded)
         except Concluded.DoesNotExist:
             pass
@@ -247,7 +375,7 @@ class MaterialsInContractViewSet(ModelViewSet):
 
 class ContractDocumentViewSet(viewsets.ViewSet):
     STORAGE_DIR_NAME = 'contracts_docs'
-    TEMPLATE_DIR = Path(settings.MEDIA_ROOT) / 'contracts_templates'
+    TEMPLATE_DIR = Path(settings.BASE_DIR) / 'contracts_templates'
 
     def _get_storage_path(self):
         return Path(settings.MEDIA_ROOT) / self.STORAGE_DIR_NAME
@@ -279,6 +407,7 @@ class ContractDocumentViewSet(viewsets.ViewSet):
             temp_docx.unlink(missing_ok=True)
             try:
                 from notifications.utils import create_notification_for_role
+
                 create_notification_for_role(
                     'manager',
                     f"Создан документ договора #{contract.id_contract}",
@@ -378,30 +507,15 @@ class ContractDocumentViewSet(viewsets.ViewSet):
             return Response({"error": f"Шаблон '{template_name}' не найден"}, status=status.HTTP_404_NOT_FOUND)
 
         try:
-            doc = DocxTemplate(str(template_path))
-            doc.render(data)
-            with tempfile.NamedTemporaryFile(suffix='.docx', delete=False) as tmp:
-                tmp_path = Path(tmp.name)
-                doc.save(tmp_path)
-            with tempfile.NamedTemporaryFile(suffix='.pdf', delete=False) as pdf_tmp:
-                pdf_path = Path(pdf_tmp.name)
-            convert_docx_to_pdf(tmp_path, pdf_path)
-            with open(pdf_path, 'rb') as f:
-                file_content = f.read()
-            storage_path = self._get_storage_path()
-            storage_path.mkdir(parents=True, exist_ok=True)
-            unique_id = uuid.uuid4().hex
-            base_name = Path(template_name).stem.replace('_template', '')
-            filename = f"{base_name}_{timezone.now().strftime('%Y%m%d_%H%M%S')}.pdf"
-            saved_filename = f"{unique_id}_{filename}"
-            saved_path = storage_path / saved_filename
-            with open(saved_path, 'wb') as f:
-                f.write(file_content)
-            contract = Contract.objects.create(file_path=f"{self.STORAGE_DIR_NAME}/{saved_filename}")
-            for path in [tmp_path, pdf_path]:
-                path.unlink(missing_ok=True)
+            generated = PdfDocumentService.generate_pdf(
+                template_name=template_name,
+                context=data,
+                base_name=Path(template_name).stem.replace('_template', ''),
+            )
+            contract = Contract.objects.create(file_path=generated.relative_path)
             try:
                 from notifications.utils import create_notification_for_role
+
                 create_notification_for_role(
                     'manager',
                     f"Создан документ договора #{contract.id_contract}",
@@ -410,13 +524,15 @@ class ContractDocumentViewSet(viewsets.ViewSet):
                 )
             except Exception as ne:
                 logger.warning(f"Ошибка отправки уведомления: {ne}")
+
             return Response({
                 "status": "success",
                 "message": "Файл успешно сохранён",
                 "contract_id": contract.id_contract,
-                "filename": saved_filename,
-                "file_url": f"/media/{self.STORAGE_DIR_NAME}/{saved_filename}"
+                "filename": generated.filename,
+                "file_url": generated.file_url,
             }, status=status.HTTP_201_CREATED)
         except Exception as e:
             logger.error(f"Ошибка сохранения PDF: {e}", exc_info=True)
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+

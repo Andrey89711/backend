@@ -98,7 +98,7 @@ python manage.py seed
 - 6 поставщиков (active / approved / pending)
 - 12 материалов с историей цен от 3 поставщиков
 - 3 склада, 12 позиций инвентаря
-- 8 контрактов (active / review / draft / closed) + 6 заключённых договоров
+- 8 контрактов (signed / approved / created / annulled) + 6 заключённых договоров
 - 6 поставок с разными статусами (включая просроченные и задержанные)
 
 **Учётные записи** (пароль у всех: `TestPass123!`):
@@ -156,7 +156,7 @@ python manage.py test users partners contracts --settings=config.test_settings -
 
 **Поставщик:** `pending` → `approved` → `active`
 
-**Договор:** `draft` → `review` → `active` → `closed`
+**Договор:** `created` → `approved` → `signed` → `annulled`
 
 **Поставка:** `Pending` → `In Transit` → `Delivered` → `Received` | `Not Delivered` | `Delayed` | `Cancel`
 
@@ -207,3 +207,36 @@ Notes:
 
 - Primary method: `docx2pdf` (requires Microsoft Word on Windows).
 - Fallback method: LibreOffice (`soffice` in PATH).
+
+## Обновления по договорному процессу и приемке (2026-03-23)
+
+### Новый workflow статусов договора
+
+- `created -> approved -> signed -> annulled`
+- Разрешены только последовательные переходы (`set-status` валидирует и возвращает `available_next_statuses`).
+- Блок поставки/акта прихода доступен только для договоров в статусе `signed`.
+
+### Новые endpoint'ы deliveries
+
+- `GET /api/deliveries/acts-of-arrival/{id}/materials/` - материалы договора для модального окна приемки.
+- `GET /api/deliveries/acts-of-arrival/materials-by-delivery/?delivery_id={id}` - то же по `delivery_id`.
+- `POST /api/deliveries/acts-of-arrival/{id}/start_receiving/` - старт оформления + сохранение фактических данных.
+- `POST /api/deliveries/acts-of-arrival/{id}/confirm_acceptance/` - подтверждение приемки + генерация PDF акта прихода и (при расхождениях) PDF акта расхождений.
+
+### Автогенерация PDF
+
+- При создании/обновлении договора генерируется PDF по шаблону `supply_contract_template.docx`.
+- При подтверждении приемки генерируется PDF акта прихода по `act_of_arrival_template.docx`.
+- При наличии расхождений дополнительно генерируется PDF акта расхождений по `act_of_divergence_template.docx`.
+
+### Автоцена материалов в договоре
+
+- При создании/обновлении `MaterialsInContract` цена берется:
+1. из актуальной цены материала у поставщика договора;
+2. fallback: последняя доступная цена по материалу.
+- При отсутствии валидной цены API возвращает `400` с понятной ошибкой по `unit_price`.
+
+### Миграции
+
+- `contracts/migrations/0006_contract_status_flow.py`
+- `deliveries/migrations/0004_actofarrival_pdf_paths.py`

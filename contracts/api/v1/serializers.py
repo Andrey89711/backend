@@ -14,6 +14,11 @@ class MaterialsInContractSerializer(serializers.ModelSerializer):
             'actual_quantity', 'condition',
         ]
 
+    def validate_unit_price(self, value):
+        if value is not None and value <= 0:
+            raise serializers.ValidationError('Цена за единицу должна быть больше 0.')
+        return value
+
 
 class ConcludedSerializer(serializers.ModelSerializer):
     supplier_name = serializers.ReadOnlyField(source='id_supplier.name')
@@ -56,14 +61,19 @@ class ContractSerializer(serializers.ModelSerializer):
     filename = serializers.SerializerMethodField()
     file_download_url = serializers.SerializerMethodField()
     file_preview_url = serializers.SerializerMethodField()
+    available_next_statuses = serializers.SerializerMethodField()
 
     class Meta:
         model = Contract
         fields = [
             'id_contract', 'status', 'created_at', 'file_path',
-            'filename', 'file_download_url', 'file_preview_url', 'concluded_info'
+            'filename', 'file_download_url', 'file_preview_url',
+            'available_next_statuses', 'concluded_info'
         ]
-        read_only_fields = ['id_contract', 'created_at', 'filename', 'file_download_url', 'file_preview_url']
+        read_only_fields = [
+            'id_contract', 'created_at', 'filename',
+            'file_download_url', 'file_preview_url', 'available_next_statuses'
+        ]
 
     def get_filename(self, obj):
         if not obj.file_path:
@@ -84,6 +94,13 @@ class ContractSerializer(serializers.ModelSerializer):
         request = self.context.get('request')
         url = f'/api/contracts/{obj.id_contract}/file/download/?inline=true'
         return request.build_absolute_uri(url) if request else url
+
+    def get_available_next_statuses(self, obj):
+        return obj.get_available_next_statuses()
+
+
+class SetContractStatusSerializer(serializers.Serializer):
+    status = serializers.ChoiceField(choices=[status for status, _ in Contract.STATUS_CHOICES])
 
 class ActOfDivergenceItemSerializer(serializers.Serializer):
     name       = serializers.CharField()
