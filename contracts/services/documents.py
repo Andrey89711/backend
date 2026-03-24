@@ -110,17 +110,39 @@ def build_contract_context(contract: Contract) -> dict:
     concluded = getattr(contract, 'concluded', None)
     rows = _contract_material_rows(contract)
     total = sum(r['sum'] for r in rows)
+    
+    supplier = concluded.id_supplier if concluded else None
+    director = concluded.id_director if concluded else None
+    manager = concluded.id_manager if concluded else None
+    
     return {
-        'contract_number': contract.id_contract,
-        'created_at': timezone.localtime(contract.created_at).strftime('%d.%m.%Y %H:%M') if contract.created_at else '',
-        'status': contract.status,
-        'supplier_name': concluded.id_supplier.name if concluded else '',
-        'manager_name': concluded.id_manager.full_name if concluded else '',
-        'director_name': concluded.id_director.full_name if concluded else '',
-        'payment_date': concluded.payment_date.strftime('%d.%m.%Y') if concluded and concluded.payment_date else '',
-        'delivery_date': concluded.delivery_date.strftime('%d.%m.%Y') if concluded and concluded.delivery_date else '',
-        'materials': rows,
-        'total_cost': round(total, 2),
+        'supplier_full_name': supplier.name if supplier else 'ООО "Поставщик"',
+        'supplier_name':      supplier.name if supplier else 'ООО "Поставщик"',
+        'supplier_inn':       supplier.tax_id if supplier else '1234567890',
+        'supplier_address':   supplier.payment_details if supplier else '123456, г. Москва, ул. Ленина, д. 1',
+        'supplier_director':  supplier.director_full_name if supplier else 'Иванов И.И.',
+        'supplier_director_position': 'Директор',
+        'supplier_basis':     'Устава',
+        'buyer_full_name':            director.full_name if director else 'Петров П.П.',
+        'buyer_director':             director.full_name if director else 'Петров П.П.',
+        'buyer_director_position':    'Директор',
+        'buyer_basis':                'Устава',
+        'buyer_inn':                  '9876543210',
+        'buyer_address':              '101000, г. Москва, ул. Тверская, д. 1',
+        'contract_number':    contract.id_contract,
+        'contract_date':      concluded.conclusion_dates.strftime('%d.%m.%Y') if concluded and concluded.conclusion_dates else '01.01.2024',
+        'contract_end_date':  concluded.payment_date.strftime('%d.%m.%Y') if concluded and concluded.payment_date else '31.12.2024',
+        'place_of_contract':  'г. Москва',
+        'consignee':          'Покупатель',
+        'delivery_frequency': 'ежемесячно',
+        'delivery_schedule':  'по графику',
+        'transport_type':     'автомобильным транспортом',
+        'payment_term':       30,
+        'penalty_shortage':   0.1,
+        'penalty_late_payment': 0.1,
+        'renewal_term':       'один год',
+        'materials':          rows,
+        'total_cost':         round(total, 2),
     }
 
 
