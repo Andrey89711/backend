@@ -132,7 +132,7 @@ def build_contract_context(contract: Contract) -> dict:
         'contract_number':    contract.id_contract,
         'contract_date':      concluded.conclusion_dates.strftime('%d.%m.%Y') if concluded and concluded.conclusion_dates else '01.01.2024',
         'contract_end_date':  concluded.payment_date.strftime('%d.%m.%Y') if concluded and concluded.payment_date else '31.12.2024',
-        'place_of_contract':  'г. Москва',
+        'place_of_contract':  'Москва',
         'consignee':          'Покупатель',
         'delivery_frequency': 'ежемесячно',
         'delivery_schedule':  'по графику',
