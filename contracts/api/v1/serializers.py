@@ -31,6 +31,8 @@ class ConcludedSerializer(serializers.ModelSerializer):
         source='id_contract.materialsincontract_set',
         many=True, read_only=True
     )
+    status = serializers.CharField(source='id_contract.status', read_only=True)
+    available_next_statuses = serializers.SerializerMethodField()
 
     class Meta:
         model = Concluded
@@ -42,8 +44,13 @@ class ConcludedSerializer(serializers.ModelSerializer):
             'id_manager', 'manager_name',
             'id_director', 'director_name',
             'materials',
+            'status',
+            'available_next_statuses'
         ]
-        read_only_fields = ['materials', 'computed_cost', 'cost_formatted']
+        read_only_fields = ['materials', 'computed_cost', 'cost_formatted', 'status', 'available_next_statuses']
+
+    def get_available_next_statuses(self, obj):
+        return obj.id_contract.get_available_next_statuses()
 
     def get_computed_cost(self, obj):
         total = sum(
