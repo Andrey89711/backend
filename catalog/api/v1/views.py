@@ -8,6 +8,7 @@ from rest_framework.response import Response
 from datetime import datetime
 from ...models import Materials, Prices
 from contracts.models import MaterialsInContract, Concluded
+from warehousing.models import Inventory
 
 class MaterialsViewSet(viewsets.ModelViewSet):
     queryset = Materials.objects.all()
@@ -21,7 +22,6 @@ class MaterialsViewSet(viewsets.ModelViewSet):
         Возвращает статистику по материалам: суммарное количество по всем договорам.
         Формат: {"Название материала": суммарное_количество, ...}
         """
-        # Агрегируем сумму materials_quality_in_contract для каждого материала
         concluded_contract_ids = Concluded.objects.values_list('id_contract', flat=True)
         
         data = (
@@ -34,18 +34,39 @@ class MaterialsViewSet(viewsets.ModelViewSet):
         result = {item['id_materials__name']: item['total_quantity'] or 0 for item in data}
         return Response(result)
 
-
     @action(detail=False, methods=['get'])
     def status(self, request):
         """
         Возвращает список материалов с их минимальным и максимальным количеством,
-        ограниченный материалами, участвующими в заключённых договорах.
-        Формат: [{"name": str, "min_quantity": float, "max_quantity": float}, ...]
+        ограниченный материалами, участвующими в заключённых договорах за указанный период.
+        Параметры: ?from=YYYY-MM-DD&to=YYYY-MM-DD
         """
-        # Получаем id материалов, которые есть в заключённых договорах
-        concluded_contract_ids = Concluded.objects.values_list('id_contract', flat=True)
+        # Фильтруем заключённые договоры по дате
+        concluded_qs = Concluded.objects.all()
+        from_date = request.query_params.get('from')
+        to_date = request.query_params.get('to')
+
+        if from_date:
+            try:
+                from_date_obj = datetime.strptime(from_date, '%Y-%m-%d').date()
+                concluded_qs = concluded_qs.filter(conclusion_dates__gte=from_date_obj)
+            except ValueError:
+                pass
+        if to_date:
+            try:
+                to_date_obj = datetime.strptime(to_date, '%Y-%m-%d').date()
+                concluded_qs = concluded_qs.filter(conclusion_dates__lte=to_date_obj)
+            except ValueError:
+                pass
+
+        # Получаем id договоров, попавших в период
+        contract_ids = concluded_qs.values_list('id_contract', flat=True)
+        if not contract_ids:
+            return Response([])
+
+        # Получаем id материалов, которые есть в этих договорах
         material_ids = MaterialsInContract.objects.filter(
-            id_contract_id__in=concluded_contract_ids
+            id_contract_id__in=contract_ids
         ).values_list('id_materials', flat=True).distinct()
 
         # Выбираем материалы с их min/max
