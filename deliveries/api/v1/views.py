@@ -1,6 +1,5 @@
 import logging
-from datetime import timedelta
-
+from datetime import datetime, timedelta
 from django.db.models import Count, Sum
 from django.utils import timezone
 from rest_framework import status, viewsets
@@ -362,16 +361,32 @@ class ActOfArrivalViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['get'])
     def statistics(self, request):
-        """Статистика по актам прибытия."""
-        total = self.queryset.count()
-        by_status = self.queryset.values('status').annotate(count=Count('id_act_of_arrival'))
+        """Статистика по актам прибытия за период (фильтрация по дате доставки)."""
+        from_date = request.query_params.get('from')
+        to_date = request.query_params.get('to')
+        qs = self.queryset
+
+        if from_date:
+            try:
+                from_date_obj = datetime.strptime(from_date, '%Y-%m-%d').date()
+                qs = qs.filter(delivery__delivery_date__gte=from_date_obj)
+            except ValueError:
+                pass
+        if to_date:
+            try:
+                to_date_obj = datetime.strptime(to_date, '%Y-%m-%d').date()
+                qs = qs.filter(delivery__delivery_date__lte=to_date_obj)
+            except ValueError:
+                pass
+
+        total = qs.count()
+        by_status = qs.values('status').annotate(count=Count('id_act_of_arrival'))
         status_counts = {item['status']: item['count'] for item in by_status}
         response_data = {
             'total': total,
             **status_counts
         }
         return Response(response_data)
-
 
 def _check_min_stock_notifications(materials_qs):
     """Создает уведомления если остаток упал ниже минимума."""

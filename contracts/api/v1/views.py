@@ -2,9 +2,10 @@ import logging
 import re
 import tempfile
 import uuid
+
 from datetime import timedelta
 from pathlib import Path
-
+from datetime import datetime
 from docxtpl import DocxTemplate
 from django.conf import settings
 from django.http import FileResponse, HttpResponse
@@ -232,12 +233,28 @@ class ConcludedViewSet(ModelViewSet):
 
     @action(detail=False, methods=['get'])
     def statistics(self, request):
+        from_date = request.query_params.get('from')
+        to_date = request.query_params.get('to')
+        
+        qs = self.queryset
+        if from_date:
+            try:
+                from_date_obj = datetime.strptime(from_date, '%Y-%m-%d').date()
+                qs = qs.filter(conclusion_dates__gte=from_date_obj)
+            except ValueError:
+                pass
+        if to_date:
+            try:
+                to_date_obj = datetime.strptime(to_date, '%Y-%m-%d').date()
+                qs = qs.filter(conclusion_dates__lte=to_date_obj)
+            except ValueError:
+                pass
+
         today = timezone.now().date()
         month_ago = today - timedelta(days=30)
-        qs = self.queryset
         total_count = qs.count()
         total_cost = qs.aggregate(total=Sum('cost'))['total'] or 0
-        recent_count = qs.filter(conclusion_dates__gte=month_ago).count()
+        recent_count = self.queryset.filter(conclusion_dates__gte=month_ago).count()
         overdue_payment = qs.filter(payment_date__lt=today).count()
         unpaid_count = qs.filter(is_paid=False).count()
         overdue_unpaid_count = qs.filter(is_paid=False, payment_date__lt=today).count()
@@ -253,7 +270,24 @@ class ConcludedViewSet(ModelViewSet):
 
     @action(detail=False, methods=['get'])
     def by_manager(self, request):
-        data = self.queryset.values('id_manager__full_name', 'id_manager__id_manager').annotate(
+        from_date = request.query_params.get('from')
+        to_date = request.query_params.get('to')
+        
+        qs = self.queryset
+        if from_date:
+            try:
+                from_date_obj = datetime.strptime(from_date, '%Y-%m-%d').date()
+                qs = qs.filter(conclusion_dates__gte=from_date_obj)
+            except ValueError:
+                pass
+        if to_date:
+            try:
+                to_date_obj = datetime.strptime(to_date, '%Y-%m-%d').date()
+                qs = qs.filter(conclusion_dates__lte=to_date_obj)
+            except ValueError:
+                pass
+        
+        data = qs.values('id_manager__full_name', 'id_manager__id_manager').annotate(
             count=Count('id_contract'), total_cost=Sum('cost')
         )
         result = [
@@ -266,7 +300,6 @@ class ConcludedViewSet(ModelViewSet):
             for item in data
         ]
         return Response(result)
-
 
 class ContractViewSet(ModelViewSet):
     queryset = Contract.objects.all()
