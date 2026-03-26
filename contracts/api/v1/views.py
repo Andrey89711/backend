@@ -233,12 +233,28 @@ class ConcludedViewSet(ModelViewSet):
 
     @action(detail=False, methods=['get'])
     def statistics(self, request):
+        from_date = request.query_params.get('from')
+        to_date = request.query_params.get('to')
+        
+        qs = self.queryset
+        if from_date:
+            try:
+                from_date_obj = datetime.strptime(from_date, '%Y-%m-%d').date()
+                qs = qs.filter(conclusion_dates__gte=from_date_obj)
+            except ValueError:
+                pass
+        if to_date:
+            try:
+                to_date_obj = datetime.strptime(to_date, '%Y-%m-%d').date()
+                qs = qs.filter(conclusion_dates__lte=to_date_obj)
+            except ValueError:
+                pass
+
         today = timezone.now().date()
         month_ago = today - timedelta(days=30)
-        qs = self.queryset
         total_count = qs.count()
         total_cost = qs.aggregate(total=Sum('cost'))['total'] or 0
-        recent_count = qs.filter(conclusion_dates__gte=month_ago).count()
+        recent_count = self.queryset.filter(conclusion_dates__gte=month_ago).count()
         overdue_payment = qs.filter(payment_date__lt=today).count()
         unpaid_count = qs.filter(is_paid=False).count()
         overdue_unpaid_count = qs.filter(is_paid=False, payment_date__lt=today).count()
