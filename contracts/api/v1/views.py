@@ -2,9 +2,10 @@ import logging
 import re
 import tempfile
 import uuid
+
 from datetime import timedelta
 from pathlib import Path
-
+from datetime import datetime
 from docxtpl import DocxTemplate
 from django.conf import settings
 from django.http import FileResponse, HttpResponse
@@ -253,7 +254,24 @@ class ConcludedViewSet(ModelViewSet):
 
     @action(detail=False, methods=['get'])
     def by_manager(self, request):
-        data = self.queryset.values('id_manager__full_name', 'id_manager__id_manager').annotate(
+        from_date = request.query_params.get('from')
+        to_date = request.query_params.get('to')
+        
+        qs = self.queryset
+        if from_date:
+            try:
+                from_date_obj = datetime.strptime(from_date, '%Y-%m-%d').date()
+                qs = qs.filter(conclusion_dates__gte=from_date_obj)
+            except ValueError:
+                pass
+        if to_date:
+            try:
+                to_date_obj = datetime.strptime(to_date, '%Y-%m-%d').date()
+                qs = qs.filter(conclusion_dates__lte=to_date_obj)
+            except ValueError:
+                pass
+        
+        data = qs.values('id_manager__full_name', 'id_manager__id_manager').annotate(
             count=Count('id_contract'), total_cost=Sum('cost')
         )
         result = [
@@ -266,7 +284,6 @@ class ConcludedViewSet(ModelViewSet):
             for item in data
         ]
         return Response(result)
-
 
 class ContractViewSet(ModelViewSet):
     queryset = Contract.objects.all()
