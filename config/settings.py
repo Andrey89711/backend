@@ -34,6 +34,7 @@ INSTALLED_APPS = [
     'deliveries',
     'finance',
     'notifications',
+    'admin_panel',
     'corsheaders',
 ]
 
