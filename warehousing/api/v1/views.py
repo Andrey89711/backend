@@ -1,9 +1,9 @@
 from rest_framework import viewsets, filters
 from ...models import Works, Warehouse, Inventory
 from .serializers import WarehouseSerializer, WorksSerializer, InventorySerializer
-from users.permissions import HasAnyRole, ADMIN, STOREKEEPER
+from users.permissions import HasAnyRole, ADMIN, STOREKEEPER, MANAGER, DIRECTOR
 
-_WAREHOUSE_ROLES = (ADMIN, STOREKEEPER)
+_WAREHOUSE_ROLES = (ADMIN, STOREKEEPER, MANAGER, DIRECTOR)
 
 
 class WarehouseViewSet(viewsets.ModelViewSet):
@@ -25,7 +25,6 @@ class WorksViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         qs = Works.objects.all()
-        # Фильтр по складу, если передан ?warehouse_id=1
         warehouse_id = self.request.query_params.get('warehouse_id')
         if warehouse_id:
             qs = qs.filter(id_warehouse=warehouse_id)

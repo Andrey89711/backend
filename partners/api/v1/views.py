@@ -8,10 +8,10 @@ from datetime import timedelta
 from partners.models import Supplier
 from catalog.models import Prices
 from .serializers import SupplierSerializer, SupplierPriceAnalyticSerializer
-from users.permissions import HasAnyRole, ADMIN, DIRECTOR, MANAGER, ACCOUNTANT
+from users.permissions import HasAnyRole, ADMIN, DIRECTOR, MANAGER, ACCOUNTANT, STOREKEEPER
 
-_READ_ROLES = (ADMIN, DIRECTOR, MANAGER, ACCOUNTANT)
-_WRITE_ROLES = (ADMIN, MANAGER)
+_READ_ROLES = (ADMIN, DIRECTOR, MANAGER, ACCOUNTANT, STOREKEEPER)
+_WRITE_ROLES = (ADMIN, MANAGER, DIRECTOR)
 _STATUS_ROLES = (ADMIN, MANAGER, DIRECTOR)
 
 

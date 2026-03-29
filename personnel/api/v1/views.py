@@ -4,7 +4,7 @@ from .serializers import DirectorSerializer, AccountantSerializer, ManagerSerial
 from users.permissions import HasAnyRole, ADMIN, DIRECTOR, MANAGER, ACCOUNTANT, STOREKEEPER
 
 _READ_ROLES = (ADMIN, DIRECTOR, MANAGER, ACCOUNTANT, STOREKEEPER)
-
+_WRITE_ROLES = (ADMIN, DIRECTOR, MANAGER) 
 
 class DirectorViewSet(viewsets.ModelViewSet):
     queryset = Director.objects.all()
@@ -13,7 +13,7 @@ class DirectorViewSet(viewsets.ModelViewSet):
     def get_permissions(self):
         if self.action in ('list', 'retrieve'):
             return [HasAnyRole(*_READ_ROLES)()]
-        return [HasAnyRole(ADMIN)()]
+        return [HasAnyRole(*_WRITE_ROLES)()]
 
 
 class AccountantViewSet(viewsets.ModelViewSet):
@@ -23,7 +23,7 @@ class AccountantViewSet(viewsets.ModelViewSet):
     def get_permissions(self):
         if self.action in ('list', 'retrieve'):
             return [HasAnyRole(*_READ_ROLES)()]
-        return [HasAnyRole(ADMIN)()]
+        return [HasAnyRole(*_WRITE_ROLES)()]
 
 
 class ManagerViewSet(viewsets.ModelViewSet):
@@ -33,7 +33,7 @@ class ManagerViewSet(viewsets.ModelViewSet):
     def get_permissions(self):
         if self.action in ('list', 'retrieve'):
             return [HasAnyRole(*_READ_ROLES)()]
-        return [HasAnyRole(ADMIN)()]
+        return [HasAnyRole(*_WRITE_ROLES)()]
 
 
 class StorekeeperViewSet(viewsets.ModelViewSet):
@@ -43,4 +43,4 @@ class StorekeeperViewSet(viewsets.ModelViewSet):
     def get_permissions(self):
         if self.action in ('list', 'retrieve'):
             return [HasAnyRole(*_READ_ROLES)()]
-        return [HasAnyRole(ADMIN)()]
+        return [HasAnyRole(*_WRITE_ROLES)()]

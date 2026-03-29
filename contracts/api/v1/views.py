@@ -201,7 +201,7 @@ class ConcludedViewSet(ModelViewSet):
         if self.action == 'pay':
             return [HasAnyRole(ADMIN, ACCOUNTANT)()]
         if self.action in ('create', 'update', 'partial_update', 'destroy'):
-            return [HasAnyRole(ADMIN, MANAGER)()]
+            return [HasAnyRole(ADMIN, MANAGER, DIRECTOR)()]
         return [HasAnyRole(ADMIN, DIRECTOR, MANAGER, ACCOUNTANT)()]
 
     def perform_create(self, serializer):
@@ -319,7 +319,7 @@ class ContractViewSet(ModelViewSet):
         if self.action in ('create', 'update', 'partial_update'):
             return [HasAnyRole(ADMIN, MANAGER)()]
         if self.action == 'destroy':
-            return [HasAnyRole(ADMIN)()]
+           return [HasAnyRole(ADMIN, DIRECTOR, MANAGER)()]
         return [HasAnyRole(ADMIN, DIRECTOR, MANAGER, ACCOUNTANT, STOREKEEPER)()]
 
     def perform_create(self, serializer):
@@ -461,8 +461,8 @@ class MaterialsInContractViewSet(ModelViewSet):
 
     def get_permissions(self):
         if self.action in ('list', 'retrieve', 'by_contract'):
-            return [HasAnyRole(ADMIN, DIRECTOR, MANAGER, ACCOUNTANT)()]
-        return [HasAnyRole(ADMIN, MANAGER)()]
+            return [HasAnyRole(ADMIN, DIRECTOR, MANAGER, ACCOUNTANT, STOREKEEPER)()]
+        return [HasAnyRole(ADMIN, MANAGER, DIRECTOR)()]
 
     def perform_create(self, serializer):
         contract = serializer.validated_data['id_contract']

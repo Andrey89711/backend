@@ -12,9 +12,9 @@ from contracts.services.documents import generate_arrival_pdf, generate_divergen
 from deliveries.choices import DeliveryStatus
 from deliveries.models import AcceptanceOfDelivery, ActOfArrival, Delivery
 from warehousing.models import Inventory, Works
-from users.permissions import HasAnyRole, ADMIN, STOREKEEPER
+from users.permissions import HasAnyRole, ADMIN, STOREKEEPER, MANAGER, DIRECTOR, ACCOUNTANT
 
-_DELIVERY_ROLES = (ADMIN, STOREKEEPER)
+_DELIVERY_ROLES = (ADMIN, STOREKEEPER, MANAGER, DIRECTOR)
 from .serializers import (
     DeliverySerializer,
     ActOfArrivalSerializer,
@@ -67,6 +67,8 @@ class DeliveryViewSet(viewsets.ModelViewSet):
     serializer_class = DeliverySerializer
 
     def get_permissions(self):
+        if self.action in ('list', 'retrieve', 'alerts', 'pending_today'):
+            return [HasAnyRole(ACCOUNTANT, *_DELIVERY_ROLES)()]
         return [HasAnyRole(*_DELIVERY_ROLES)()]
 
     def get_queryset(self):
