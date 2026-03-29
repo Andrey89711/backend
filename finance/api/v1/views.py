@@ -4,6 +4,9 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from finance.models import EnterpriseBalance, Credit, AccountsPayable
 from .serializers import EnterpriseBalanceSerializer, CreditSerializer, AccountsPayableSerializer
+from users.permissions import HasAnyRole, ADMIN, DIRECTOR, ACCOUNTANT
+
+_FINANCE_ROLES = (ADMIN, DIRECTOR, ACCOUNTANT)
 
 
 def _update_overdue(qs, model):
@@ -14,6 +17,9 @@ def _update_overdue(qs, model):
 class EnterpriseBalanceViewSet(viewsets.ModelViewSet):
     queryset = EnterpriseBalance.objects.all()
     serializer_class = EnterpriseBalanceSerializer
+
+    def get_permissions(self):
+        return [HasAnyRole(*_FINANCE_ROLES)()]
 
     def get_object_or_create(self):
         obj = EnterpriseBalance.objects.first()
@@ -62,6 +68,9 @@ class EnterpriseBalanceViewSet(viewsets.ModelViewSet):
 class CreditViewSet(viewsets.ModelViewSet):
     serializer_class = CreditSerializer
 
+    def get_permissions(self):
+        return [HasAnyRole(*_FINANCE_ROLES)()]
+
     def get_queryset(self):
         _update_overdue(None, Credit)
         qs = Credit.objects.all()
@@ -73,6 +82,9 @@ class CreditViewSet(viewsets.ModelViewSet):
 
 class AccountsPayableViewSet(viewsets.ModelViewSet):
     serializer_class = AccountsPayableSerializer
+
+    def get_permissions(self):
+        return [HasAnyRole(*_FINANCE_ROLES)()]
 
     def get_queryset(self):
         _update_overdue(None, AccountsPayable)

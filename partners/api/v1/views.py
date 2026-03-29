@@ -8,6 +8,11 @@ from datetime import timedelta
 from partners.models import Supplier
 from catalog.models import Prices
 from .serializers import SupplierSerializer, SupplierPriceAnalyticSerializer
+from users.permissions import HasAnyRole, ADMIN, DIRECTOR, MANAGER, ACCOUNTANT, STOREKEEPER
+
+_READ_ROLES = (ADMIN, DIRECTOR, MANAGER, ACCOUNTANT, STOREKEEPER)
+_WRITE_ROLES = (ADMIN, MANAGER, DIRECTOR)
+_STATUS_ROLES = (ADMIN, MANAGER, DIRECTOR)
 
 
 class SupplierViewSet(viewsets.ModelViewSet):
@@ -15,6 +20,13 @@ class SupplierViewSet(viewsets.ModelViewSet):
     serializer_class = SupplierSerializer
     filter_backends = [filters.SearchFilter]
     search_fields = ['name', 'tax_id']
+
+    def get_permissions(self):
+        if self.action == 'set_status':
+            return [HasAnyRole(*_STATUS_ROLES)()]
+        if self.action in ('create', 'update', 'partial_update', 'destroy'):
+            return [HasAnyRole(*_WRITE_ROLES)()]
+        return [HasAnyRole(*_READ_ROLES)()]
 
     @action(detail=True, methods=['post'], url_path='set-status')
     def set_status(self, request, pk=None):

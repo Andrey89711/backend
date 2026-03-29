@@ -9,12 +9,22 @@ from datetime import datetime
 from ...models import Materials, Prices
 from contracts.models import MaterialsInContract, Concluded
 from warehousing.models import Inventory
+from users.permissions import HasAnyRole, ADMIN, DIRECTOR, MANAGER, ACCOUNTANT, STOREKEEPER
+
+_ALL_ROLES = (ADMIN, DIRECTOR, MANAGER, ACCOUNTANT, STOREKEEPER)
+_WRITE_ROLES = (ADMIN, MANAGER)
+
 
 class MaterialsViewSet(viewsets.ModelViewSet):
     queryset = Materials.objects.all()
     serializer_class = MaterialsSerializer
     filter_backends = [filters.SearchFilter]
     search_fields = ['name']
+
+    def get_permissions(self):
+        if self.action in ('list', 'retrieve', 'statistics', 'status', 'analysis', 'by_supplier'):
+            return [HasAnyRole(*_ALL_ROLES)()]
+        return [HasAnyRole(*_WRITE_ROLES)()]
 
     @action(detail=False, methods=['get'])
     def statistics(self, request):
@@ -41,7 +51,6 @@ class MaterialsViewSet(viewsets.ModelViewSet):
         ограниченный материалами, участвующими в заключённых договорах за указанный период.
         Параметры: ?from=YYYY-MM-DD&to=YYYY-MM-DD
         """
-        # Фильтруем заключённые договоры по дате
         concluded_qs = Concluded.objects.all()
         from_date = request.query_params.get('from')
         to_date = request.query_params.get('to')
@@ -59,17 +68,14 @@ class MaterialsViewSet(viewsets.ModelViewSet):
             except ValueError:
                 pass
 
-        # Получаем id договоров, попавших в период
         contract_ids = concluded_qs.values_list('id_contract', flat=True)
         if not contract_ids:
             return Response([])
 
-        # Получаем id материалов, которые есть в этих договорах
         material_ids = MaterialsInContract.objects.filter(
             id_contract_id__in=contract_ids
         ).values_list('id_materials', flat=True).distinct()
 
-        # Выбираем материалы с их min/max
         materials = Materials.objects.filter(id_materials__in=material_ids).only(
             'name', 'min_quantity', 'max_quantity'
         )
@@ -159,6 +165,11 @@ class PricesViewSet(viewsets.ModelViewSet):
     queryset = Prices.objects.all()
     serializer_class = PricesSerializer
 
+    def get_permissions(self):
+        if self.action in ('list', 'retrieve', 'filtered_by_date', 'best_offers', 'filtered_by_partners'):
+            return [HasAnyRole(*_ALL_ROLES)()]
+        return [HasAnyRole(ADMIN, MANAGER, ACCOUNTANT)()]
+
     def get_target_date(self, request):
         """Парсим дату из параметров ?date=YYYY-MM-DD
         GET /api/catalog/prices/filtered_by_date/?date=2026-02-28
@@ -172,15 +183,12 @@ class PricesViewSet(viewsets.ModelViewSet):
                 return None
         return timezone.now().date()
 
-    # 1. Эндпоинт: .../prices/filtered_by_date/
     @action(detail=False, methods=['get'])
     def filtered_by_date(self, request):
         target_date = self.get_target_date(request)
         if not target_date:
             return Response({"error": "Неверный формат даты"}, status=400)
 
-        # Выбираем последние записи цен для каждого сочетания Материал+Поставщик
-        # Используем list() и .first() для совместимости с MySQL без LIMIT в subquery
         query = Prices.objects.values('id_materials', 'id_supplier').filter(
             effective_dates__lte=target_date
         ).distinct()
@@ -199,7 +207,6 @@ class PricesViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(queryset, many=True)
         return Response(serializer.data)
 
-    # 2. Эндпоинт: .../prices/best_offers/
     @action(detail=False, methods=['get'])
     def best_offers(self, request):
         """
@@ -211,8 +218,6 @@ class PricesViewSet(viewsets.ModelViewSet):
         if not target_date:
             return Response({"error": "Неверный формат даты"}, status=400)
 
-        # Получаем актуальный срез: последняя цена на каждое сочетание материал+поставщик
-        # Используем queryset.values_list() и list() для совместимости с MySQL без LIMIT в subquery
         query = Prices.objects.values('id_materials', 'id_supplier').filter(
             effective_dates__lte=target_date
         ).distinct()
@@ -230,8 +235,6 @@ class PricesViewSet(viewsets.ModelViewSet):
         if not actual_prices:
             return Response([])
 
-        # Находим минимальную цену по каждому материалу (в Python, чтобы избежать
-        # сложных вложенных запросов)
         best_by_material: dict = {}
         for p in actual_prices:
             mat_id = p.id_materials_id
@@ -241,7 +244,6 @@ class PricesViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(list(best_by_material.values()), many=True)
         return Response(serializer.data)
 
-    # 3. Эндпоинт: .../prices/filtered_by_partners/
     @action(detail=False, methods=['get'])
     def filtered_by_partners(self, request):
         """
@@ -258,8 +260,6 @@ class PricesViewSet(viewsets.ModelViewSet):
         if not supplier_id:
             return Response({"error": "Необходимо указать supplier_id в параметрах запроса"}, status=400)
 
-        # Выбираем последние записи цен для каждого материала, 
-        # но только для указанного поставщика
         materials_query = Prices.objects.values('id_materials').filter(
             id_supplier=supplier_id,
             effective_dates__lte=target_date

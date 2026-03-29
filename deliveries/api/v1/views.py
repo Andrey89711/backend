@@ -12,6 +12,9 @@ from contracts.services.documents import generate_arrival_pdf, generate_divergen
 from deliveries.choices import DeliveryStatus
 from deliveries.models import AcceptanceOfDelivery, ActOfArrival, Delivery
 from warehousing.models import Inventory, Works
+from users.permissions import HasAnyRole, ADMIN, STOREKEEPER, MANAGER, DIRECTOR, ACCOUNTANT
+
+_DELIVERY_ROLES = (ADMIN, STOREKEEPER, MANAGER, DIRECTOR)
 from .serializers import (
     DeliverySerializer,
     ActOfArrivalSerializer,
@@ -62,6 +65,11 @@ def _build_divergence_items(materials_qs):
 
 class DeliveryViewSet(viewsets.ModelViewSet):
     serializer_class = DeliverySerializer
+
+    def get_permissions(self):
+        if self.action in ('list', 'retrieve', 'alerts', 'pending_today'):
+            return [HasAnyRole(ACCOUNTANT, *_DELIVERY_ROLES)()]
+        return [HasAnyRole(*_DELIVERY_ROLES)()]
 
     def get_queryset(self):
         qs = Delivery.objects.all().select_related('id_contract', 'id_act_of_arrival')
@@ -119,6 +127,9 @@ class DeliveryViewSet(viewsets.ModelViewSet):
 class ActOfArrivalViewSet(viewsets.ModelViewSet):
     queryset = ActOfArrival.objects.all()
     serializer_class = ActOfArrivalSerializer
+
+    def get_permissions(self):
+        return [HasAnyRole(*_DELIVERY_ROLES)()]
 
     def _get_delivery(self, act):
         return Delivery.objects.filter(id_act_of_arrival=act).select_related('id_contract').first()
@@ -413,4 +424,7 @@ def _check_min_stock_notifications(materials_qs):
 class AcceptanceOfDeliveryViewSet(viewsets.ModelViewSet):
     queryset = AcceptanceOfDelivery.objects.all().select_related('id_storekeeper', 'id_act_of_arrival')
     serializer_class = AcceptanceOfDeliverySerializer
+
+    def get_permissions(self):
+        return [HasAnyRole(*_DELIVERY_ROLES)()]
 
