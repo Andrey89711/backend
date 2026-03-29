@@ -20,6 +20,7 @@ from drf_spectacular.utils import extend_schema
 
 from contracts.models import Concluded, Contract, MaterialsInContract
 from contracts.services.documents import PdfDocumentService, generate_contract_pdf
+from users.permissions import HasAnyRole, ADMIN, DIRECTOR, MANAGER, ACCOUNTANT, STOREKEEPER
 from contracts.services.pricing import (
     PriceResolutionError,
     is_material_available_for_supplier,
@@ -196,6 +197,13 @@ class ConcludedViewSet(ModelViewSet):
 
     serializer_class = ConcludedSerializer
 
+    def get_permissions(self):
+        if self.action == 'pay':
+            return [HasAnyRole(ADMIN, ACCOUNTANT)()]
+        if self.action in ('create', 'update', 'partial_update', 'destroy'):
+            return [HasAnyRole(ADMIN, MANAGER)()]
+        return [HasAnyRole(ADMIN, DIRECTOR, MANAGER, ACCOUNTANT)()]
+
     def perform_create(self, serializer):
         concluded = serializer.save()
         _create_delivery_and_act(concluded)
@@ -304,6 +312,15 @@ class ConcludedViewSet(ModelViewSet):
 class ContractViewSet(ModelViewSet):
     queryset = Contract.objects.all()
     serializer_class = ContractSerializer
+
+    def get_permissions(self):
+        if self.action == 'set_status':
+            return [HasAnyRole(ADMIN, DIRECTOR)()]
+        if self.action in ('create', 'update', 'partial_update'):
+            return [HasAnyRole(ADMIN, MANAGER)()]
+        if self.action == 'destroy':
+            return [HasAnyRole(ADMIN)()]
+        return [HasAnyRole(ADMIN, DIRECTOR, MANAGER, ACCOUNTANT, STOREKEEPER)()]
 
     def perform_create(self, serializer):
         contract = serializer.save()
@@ -442,6 +459,11 @@ class MaterialsInContractViewSet(ModelViewSet):
     queryset = MaterialsInContract.objects.all().select_related('id_materials', 'id_contract')
     serializer_class = MaterialsInContractSerializer
 
+    def get_permissions(self):
+        if self.action in ('list', 'retrieve', 'by_contract'):
+            return [HasAnyRole(ADMIN, DIRECTOR, MANAGER, ACCOUNTANT)()]
+        return [HasAnyRole(ADMIN, MANAGER)()]
+
     def perform_create(self, serializer):
         contract = serializer.validated_data['id_contract']
         material = serializer.validated_data['id_materials']
@@ -522,6 +544,9 @@ class MaterialsInContractViewSet(ModelViewSet):
 class ContractDocumentViewSet(viewsets.ViewSet):
     STORAGE_DIR_NAME = 'contracts_docs'
     TEMPLATE_DIR = Path(settings.BASE_DIR) / 'contracts_templates'
+
+    def get_permissions(self):
+        return [HasAnyRole(ADMIN, MANAGER)()]
 
     def _get_storage_path(self):
         return Path(settings.MEDIA_ROOT) / self.STORAGE_DIR_NAME

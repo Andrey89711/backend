@@ -3,10 +3,17 @@ from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
-from rest_framework.permissions import IsAdminUser
 from rest_framework.response import Response
 
-from .serializers import AdminRegisterSerializer, UserListSerializer
+from admin_panel.models import Admin
+from users.models import UserProfile
+from users.permissions import HasAnyRole, IsSuperAdmin, ADMIN
+from .serializers import (
+    AdminRegisterSerializer,
+    AdminSerializer,
+    CreateAdminSerializer,
+    UserListSerializer,
+)
 from personnel.models import Director, Accountant, Manager, Storekeeper
 
 User = get_user_model()
@@ -18,11 +25,13 @@ ROLE_MODEL_MAP = {
     'storekeepers': Storekeeper,
 }
 
+_IsAdminOrSuper = HasAnyRole(ADMIN)
+
 
 @api_view(['POST'])
-@permission_classes([IsAdminUser])
+@permission_classes([_IsAdminOrSuper])
 def register_user(request):
-    """POST /api/admin-panel/register/"""
+    """POST /api/admin-panel/register/ — создать сотрудника (admin + superadmin)"""
     serializer = AdminRegisterSerializer(data=request.data)
     if serializer.is_valid():
         serializer.save()
@@ -31,7 +40,7 @@ def register_user(request):
 
 
 @api_view(['GET'])
-@permission_classes([IsAdminUser])
+@permission_classes([_IsAdminOrSuper])
 def list_users(request):
     """GET /api/admin-panel/users/"""
     users = User.objects.all().order_by('-date_joined')
@@ -40,7 +49,7 @@ def list_users(request):
 
 
 @api_view(['PATCH'])
-@permission_classes([IsAdminUser])
+@permission_classes([_IsAdminOrSuper])
 def update_personnel(request, role, pk):
     """PATCH /api/admin-panel/personnel/{role}/{pk}/"""
     model = ROLE_MODEL_MAP.get(role)
@@ -65,7 +74,7 @@ def update_personnel(request, role, pk):
 
 
 @api_view(['POST'])
-@permission_classes([IsAdminUser])
+@permission_classes([_IsAdminOrSuper])
 def change_personnel_password(request, role, pk):
     model = ROLE_MODEL_MAP.get(role)
     if not model:
@@ -80,7 +89,6 @@ def change_personnel_password(request, role, pk):
     if not password:
         return Response({'password': ['Пароль не может быть пустым.']}, status=status.HTTP_400_BAD_REQUEST)
 
-    # Ищем юзера по email = contact_information
     try:
         user = User.objects.get(email=instance.contact_information)
     except User.DoesNotExist:
@@ -98,8 +106,9 @@ def change_personnel_password(request, role, pk):
     user.save()
     return Response({'detail': 'Пароль успешно изменён.'})
 
+
 @api_view(['GET'])
-@permission_classes([IsAdminUser])
+@permission_classes([_IsAdminOrSuper])
 def get_personnel_user(request, role, pk):
     """GET /api/admin-panel/personnel/{role}/{pk}/user/"""
     model = ROLE_MODEL_MAP.get(role)
@@ -115,3 +124,46 @@ def get_personnel_user(request, role, pk):
         return Response({'username': user.username, 'email': user.email})
     except User.DoesNotExist:
         return Response({'username': None, 'email': instance.contact_information})
+
+
+@api_view(['GET'])
+@permission_classes([IsSuperAdmin])
+def list_admins(request):
+    """GET /api/admin-panel/admins/ — список всех администраторов"""
+    admins = Admin.objects.all()
+    return Response(AdminSerializer(admins, many=True).data)
+
+
+@api_view(['POST'])
+@permission_classes([IsSuperAdmin])
+def create_admin(request):
+    """POST /api/admin-panel/admins/ — создать нового администратора"""
+    serializer = CreateAdminSerializer(data=request.data)
+    if serializer.is_valid():
+        serializer.save()
+        return Response({'detail': 'Администратор успешно создан.'}, status=status.HTTP_201_CREATED)
+    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+@api_view(['DELETE'])
+@permission_classes([IsSuperAdmin])
+def delete_admin(request, pk):
+    """DELETE /api/admin-panel/admins/{pk}/ — удалить администратора"""
+    try:
+        admin_record = Admin.objects.get(pk=pk)
+    except Admin.DoesNotExist:
+        return Response({'detail': 'Администратор не найден.'}, status=status.HTTP_404_NOT_FOUND)
+
+    try:
+        user = User.objects.get(email=admin_record.contact_information)
+        profile = getattr(user, 'profile', None)
+        if profile:
+            profile.role = 'viewer'
+            profile.save(update_fields=['role'])
+        user.is_staff = False
+        user.save(update_fields=['is_staff'])
+    except User.DoesNotExist:
+        pass
+
+    admin_record.delete()
+    return Response({'detail': 'Администратор удалён.'}, status=status.HTTP_200_OK)

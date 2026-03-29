@@ -50,6 +50,8 @@ class UserSerializer(serializers.ModelSerializer):
     role = serializers.SerializerMethodField()
 
     def get_role(self, obj):
+        if obj.is_superuser:
+            return 'superadmin'
         try:
             return obj.profile.role
         except UserProfile.DoesNotExist:
