@@ -60,7 +60,7 @@ CORS_ALLOWED_ORIGINS = [
     "https://piloramarama.ru",
     "http://piloramarama.ru",
     "https://www.piloramarama.ru",
-    "http://www.piloramarama.ru"
+    "http://www.piloramarama.ru",
 ]
 
 CORS_ALLOW_CREDENTIALS = True
