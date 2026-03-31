@@ -58,7 +58,7 @@ CORS_ALLOWED_ORIGINS = [
     "http://localhost:5174",
     "http://127.0.0.1:5174",
     "https://piloramarama.ru",
-    "http://piloramarama.ru"
+    "http://piloramarama.ru",
     "https://www.piloramarama.ru",
     "http://www.piloramarama.ru"
 ]
