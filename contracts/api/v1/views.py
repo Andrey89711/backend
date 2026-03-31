@@ -683,6 +683,9 @@ class ContractDocumentViewSet(viewsets.ViewSet):
             return Response({"error": f"Шаблон '{template_name}' не найден"}, status=status.HTTP_404_NOT_FOUND)
 
         try:
+            contract = Contract.objects.create()
+            data.setdefault('contract_number', contract.id_contract)
+
             logger.debug(
                 "Generate PDF template='%s' context metadata=%s",
                 template_name,
@@ -693,7 +696,8 @@ class ContractDocumentViewSet(viewsets.ViewSet):
                 context=data,
                 base_name=Path(template_name).stem.replace('_template', ''),
             )
-            contract = Contract.objects.create(file_path=generated.relative_path)
+            contract.file_path = generated.relative_path
+            contract.save(update_fields=['file_path'])
             try:
                 from notifications.utils import create_notification_for_role
 
@@ -715,5 +719,9 @@ class ContractDocumentViewSet(viewsets.ViewSet):
             }, status=status.HTTP_201_CREATED)
         except Exception as e:
             logger.error(f"Ошибка сохранения PDF: {e}", exc_info=True)
+            try:
+                contract.delete()
+            except Exception:
+                pass
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 

@@ -111,10 +111,11 @@ def build_contract_context(contract: Contract) -> dict:
     rows = _contract_material_rows(contract)
     total = sum(r['sum'] for r in rows)
     
-    supplier = concluded.id_supplier if concluded else None
-    director = concluded.id_director if concluded else None
-    manager = concluded.id_manager if concluded else None
-    
+    supplier   = concluded.id_supplier   if concluded else None
+    director   = concluded.id_director   if concluded else None
+    accountant = concluded.id_accountant if concluded else None
+    manager    = concluded.id_manager    if concluded else None
+
     return {
         'supplier_full_name': supplier.name if supplier else 'ООО "Поставщик"',
         'supplier_name':      supplier.name if supplier else 'ООО "Поставщик"',
@@ -129,6 +130,8 @@ def build_contract_context(contract: Contract) -> dict:
         'buyer_basis':                'Устава',
         'buyer_inn':                  '9876543210',
         'buyer_address':              '101000, г. Москва, ул. Тверская, д. 1',
+        'buyer_accountant':           accountant.full_name if accountant else 'Бухгалтер',
+        'buyer_manager':              manager.full_name if manager else 'Менеджер',
         'contract_number':    contract.id_contract,
         'contract_date':      concluded.conclusion_dates.strftime('%d.%m.%Y') if concluded and concluded.conclusion_dates else '01.01.2024',
         'contract_end_date':  concluded.payment_date.strftime('%d.%m.%Y') if concluded and concluded.payment_date else '31.12.2024',
