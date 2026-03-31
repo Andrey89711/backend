@@ -4,7 +4,7 @@ from pathlib import Path
 import os
 
 load_dotenv()
-ALLOWED_HOSTS = ['62.60.216.22', 'localhost', '127.0.0.1']
+ALLOWED_HOSTS = ['api.piloramarama.ru','piloramarama.ru', '62.60.216.22', 'localhost', '127.0.0.1']
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 MEDIA_ROOT = BASE_DIR.parent / 'media_files' 
@@ -57,6 +57,8 @@ CORS_ALLOWED_ORIGINS = [
     "http://127.0.0.1:5173",
     "http://localhost:5174",
     "http://127.0.0.1:5174",
+    "https://piloramarama.ru",
+    "http://piloramarama.ru"
 ]
 
 CORS_ALLOW_CREDENTIALS = True
