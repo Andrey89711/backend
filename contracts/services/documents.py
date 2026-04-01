@@ -1,6 +1,7 @@
 import logging
 import tempfile
 import uuid
+import random
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -89,11 +90,67 @@ class PdfDocumentService:
         )
 
 
+def _resolve_price(contract: Contract, material_id: int, stored_price) -> float:
+    """Цена из договора → прайс-лист поставщика → любая цена в каталоге → 0."""
+    if stored_price and float(stored_price) > 0:
+        return float(stored_price)
+    from contracts.services.pricing import resolve_unit_price_for_material, PriceResolutionError
+    try:
+        return resolve_unit_price_for_material(contract, material_id)
+    except Exception:
+        pass
+    from catalog.models import Prices
+    p = (Prices.objects
+         .filter(id_materials_id=material_id)
+         .order_by('-effective_dates', '-id_prices')
+         .first())
+    return float(p.price) if p and p.price else 0
+
+
+def _db_val(value, queryset, field: str) -> str:
+    """Вернуть value если не пустое, иначе взять первое непустое значение поля из queryset."""
+    if value:
+        return str(value)
+    result = (queryset
+              .exclude(**{f'{field}__exact': ''})
+              .values_list(field, flat=True)
+              .first())
+    return str(result) if result else '—'
+
+
+def _fmt_date(d) -> str:
+    """Форматировать date/datetime в дд.мм.гггг."""
+    if d is None:
+        return ''
+    if hasattr(d, 'strftime'):
+        return d.strftime('%d.%m.%Y')
+    return str(d)
+
+
+def _best_concluded(contract: Contract):
+    """
+    Вернуть Concluded для договора.
+    Если у договора нет Concluded — взять последний заполненный из БД
+    (фиктивная система, данные могут отсутствовать для конкретного договора).
+    """
+    from contracts.models import Concluded
+    concluded = getattr(contract, 'concluded', None)
+    if concluded:
+        return concluded
+    return (
+        Concluded.objects
+        .select_related('id_supplier', 'id_director', 'id_accountant', 'id_manager')
+        .filter(id_supplier__name__gt='')
+        .order_by('-id_contract')
+        .first()
+    )
+
+
 def _contract_material_rows(contract: Contract):
     rows = []
     for item in contract.materialsincontract_set.select_related('id_materials').all():
         qty = item.materials_quality_in_contract or 0
-        unit_price = item.unit_price or 0
+        unit_price = _resolve_price(contract, item.id_materials_id, item.unit_price)
         rows.append({
             'name': item.id_materials.name,
             'unit': item.id_materials.unit_of_measurement,
@@ -107,14 +164,17 @@ def _contract_material_rows(contract: Contract):
 
 
 def build_contract_context(contract: Contract) -> dict:
-    concluded = getattr(contract, 'concluded', None)
+    concluded = _best_concluded(contract)
     rows = _contract_material_rows(contract)
     total = sum(r['sum'] for r in rows)
-    
+
     supplier   = concluded.id_supplier   if concluded else None
     director   = concluded.id_director   if concluded else None
     accountant = concluded.id_accountant if concluded else None
     manager    = concluded.id_manager    if concluded else None
+    
+    # Заглушка для storekeeper, чтобы избежать ошибки NameError в этом контексте
+    storekeeper = None 
 
     return {
         'supplier_full_name': supplier.name if supplier else 'ООО "Поставщик"',
@@ -132,6 +192,7 @@ def build_contract_context(contract: Contract) -> dict:
         'buyer_address':              '101000, г. Москва, ул. Тверская, д. 1',
         'buyer_accountant':           accountant.full_name if accountant else 'Бухгалтер',
         'buyer_manager':              manager.full_name if manager else 'Менеджер',
+        'buyer_storekeeper': storekeeper.full_name if storekeeper else 'Складовщик',
         'contract_number':    contract.id_contract,
         'contract_date':      concluded.conclusion_dates.strftime('%d.%m.%Y') if concluded and concluded.conclusion_dates else '01.01.2024',
         'contract_end_date':  concluded.payment_date.strftime('%d.%m.%Y') if concluded and concluded.payment_date else '31.12.2024',
@@ -150,25 +211,136 @@ def build_contract_context(contract: Contract) -> dict:
 
 
 def build_arrival_context(act, delivery) -> dict:
+    from deliveries.models import AcceptanceOfDelivery
+    from partners.models import Supplier as SupplierModel
+    from personnel.models import Director, Accountant, Storekeeper
+
     contract = delivery.id_contract
+    concluded = _best_concluded(contract)
     rows = _contract_material_rows(contract)
+
+    supplier   = concluded.id_supplier   if concluded else None
+    director   = concluded.id_director   if concluded else None
+    accountant = concluded.id_accountant if concluded else None
+
+    acceptance = (
+        AcceptanceOfDelivery.objects
+        .filter(id_act_of_arrival=act)
+        .select_related('id_storekeeper')
+        .first()
+    )
+    storekeeper = acceptance.id_storekeeper if acceptance else None
+
+    today = timezone.now().date()
+
+    contract_date = _fmt_date(
+        concluded.conclusion_dates if concluded and concluded.conclusion_dates else today
+    )
+
+    total = sum(r['unit_price'] * r['qty'] for r in rows)
+
+    items = [
+        {
+            'index': idx + 1,
+            'name': r['name'],
+            'quantity': r['qty'],
+            'price_without_vat': round(r['unit_price'] / 1.2, 2),
+            'price_with_vat':    r['unit_price'],
+        }
+        for idx, r in enumerate(rows)
+    ]
+
     return {
-        'act_number': act.id_act_of_arrival,
-        'delivery_number': delivery.id_delivery,
-        'contract_number': contract.id_contract,
-        'date': timezone.now().strftime('%d.%m.%Y'),
-        'status': act.status,
-        'materials': rows,
+        'contract_number':    contract.id_contract,
+        'contract_date':      contract_date,
+        'buyer_full_name':    'ПИЛОГРАМАРАМА',
+        'buyer_inn':          '—',
+        'buyer_basis':        'Устава',
+        'buyer_director':     _db_val(director.full_name   if director   else '', Director.objects.all(),   'full_name'),
+        'buyer_accountant':   _db_val(accountant.full_name if accountant else '', Accountant.objects.all(), 'full_name'),
+        'buyer_storekeeper':  _db_val(storekeeper.full_name if storekeeper else '', Storekeeper.objects.all(), 'full_name'),
+        'supplier_full_name': _db_val(supplier.name               if supplier else '', SupplierModel.objects.all(), 'name'),
+        'supplier_inn':       _db_val(supplier.tax_id             if supplier else '', SupplierModel.objects.all(), 'tax_id'),
+        'supplier_address':   _db_val(supplier.payment_details    if supplier else '', SupplierModel.objects.all(), 'payment_details'),
+        'supplier_director':  _db_val(supplier.director_full_name if supplier else '', SupplierModel.objects.all(), 'director_full_name'),
+        'supplier_basis':     'Устава',
+        'items':              items,
+        'total_amount':       round(total, 2),
+        'total_amount_words': f'{round(total, 2)} руб.',
+        'act_number':         act.id_act_of_arrival,
+        'delivery_number':    delivery.id_delivery,
+        'date':               _fmt_date(today),
     }
 
 
 def build_divergence_context(act, delivery, divergence_items: list[dict]) -> dict:
+    from deliveries.models import AcceptanceOfDelivery
+    from partners.models import Supplier as SupplierModel
+    from personnel.models import Director, Accountant, Storekeeper
+
+    contract = delivery.id_contract
+    concluded = _best_concluded(contract)
+
+    supplier   = concluded.id_supplier   if concluded else None
+    director   = concluded.id_director   if concluded else None
+    accountant = concluded.id_accountant if concluded else None
+
+    acceptance = (
+        AcceptanceOfDelivery.objects
+        .filter(id_act_of_arrival=act)
+        .select_related('id_storekeeper')
+        .first()
+    )
+    storekeeper = acceptance.id_storekeeper if acceptance else None
+
+    today = timezone.now().date()
+
+    contract_date = _fmt_date(
+        concluded.conclusion_dates if concluded and concluded.conclusion_dates else today
+    )
+    delivery_date = _fmt_date(delivery.delivery_date if delivery.delivery_date else today)
+
+    supplier_name = _db_val(supplier.name if supplier else '', SupplierModel.objects.all(), 'name')
+    reception_start_hour = random.randint(9, 17)
+    reception_end_hour = random.randint(reception_start_hour + 1, 18)
+    reception_start_min = random.randint(0, 59)
+    reception_end_min = random.randint(0, 59)
+    commission_members_count = random.randint(2, 3)
+
     return {
-        'act_number': act.id_act_of_arrival,
-        'delivery_number': delivery.id_delivery,
-        'contract_number': delivery.id_contract_id,
-        'date': timezone.now().strftime('%d.%m.%Y'),
-        'items': divergence_items,
+        'organization_name':    'ПИЛОГРАМАРАМА',
+        'organization_address': '—',
+        'buyer_full_name':      'ПИЛОГРАМАРАМА',
+        'buyer_inn':            '—',
+        'buyer_director':       _db_val(director.full_name    if director    else '', Director.objects.all(),    'full_name'),
+        'buyer_accountant':     _db_val(accountant.full_name  if accountant  else '', Accountant.objects.all(),  'full_name'),
+        'buyer_storekeeper':    _db_val(storekeeper.full_name if storekeeper else '', Storekeeper.objects.all(), 'full_name'),
+        'supplier_full_name':   supplier_name,
+        'supplier_inn':         _db_val(supplier.tax_id             if supplier else '', SupplierModel.objects.all(), 'tax_id'),
+        'supplier_address':     _db_val(supplier.payment_details    if supplier else '', SupplierModel.objects.all(), 'payment_details'),
+        'supplier_director':    _db_val(supplier.director_full_name if supplier else '', SupplierModel.objects.all(), 'director_full_name'),
+        'contract_number':      contract.id_contract,
+        'contract_date':        contract_date,
+        'act_date':             delivery_date,
+        'act_place':            '—',
+        'reception_start_hour': reception_start_hour,
+        'reception_start_min':  reception_start_min,
+        'reception_end_hour':   reception_end_hour,
+        'reception_end_min':    reception_end_min,
+        'commission_members':   commission_members_count,
+        'commission_signature': '—',
+        'representative_name':  '—',
+        'certificate_number':   '—',
+        'certificate_date':     '—',
+        'sender_name':          supplier_name,
+        'carrier_name':         '—',
+        'invoice_number':       '—',
+        'invoice_date':         '—',
+        'sign_date':            _fmt_date(today),
+        'sign_name':            '—',
+        'items':                divergence_items,
+        'act_number':           act.id_act_of_arrival,
+        'delivery_number':      delivery.id_delivery,
     }
 
 
@@ -197,4 +369,3 @@ def generate_divergence_pdf(act, delivery, divergence_items: list[dict]) -> Gene
         context=context,
         base_name=f'act_of_divergence_{act.id_act_of_arrival}',
     )
-

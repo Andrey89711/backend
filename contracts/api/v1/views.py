@@ -546,7 +546,7 @@ class ContractDocumentViewSet(viewsets.ViewSet):
     TEMPLATE_DIR = Path(settings.BASE_DIR) / 'contracts_templates'
 
     def get_permissions(self):
-        return [HasAnyRole(ADMIN, MANAGER)()]
+        return [HasAnyRole(ADMIN, MANAGER, DIRECTOR)()]
 
     def _get_storage_path(self):
         return Path(settings.MEDIA_ROOT) / self.STORAGE_DIR_NAME
@@ -645,6 +645,8 @@ class ContractDocumentViewSet(viewsets.ViewSet):
         if not template_path.exists():
             return Response({"error": f"Шаблон '{template_name}' не найден"}, status=status.HTTP_404_NOT_FOUND)
 
+        data.setdefault('contract_number', '___')
+
         try:
             logger.debug(
                 "Generate DOCX template='%s' context metadata=%s",
@@ -684,7 +686,7 @@ class ContractDocumentViewSet(viewsets.ViewSet):
 
         try:
             contract = Contract.objects.create()
-            data.setdefault('contract_number', contract.id_contract)
+            data['contract_number'] = contract.id_contract
 
             logger.debug(
                 "Generate PDF template='%s' context metadata=%s",
