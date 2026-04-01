@@ -52,13 +52,15 @@ def _build_divergence_items(materials_qs):
         if has_qty_diff or has_condition_diff:
             unit_price = mic.unit_price or 0
             items.append({
-                'name': mic.id_materials.name,
-                'unit': mic.id_materials.unit_of_measurement,
-                'qty_doc': planned,
+                'name':       mic.id_materials.name,
+                'series':     '',
+                'unit':       mic.id_materials.unit_of_measurement,
+                'price':      unit_price,
+                'qty_doc':    planned,
                 'qty_actual': actual,
-                'sum_doc': round(planned * unit_price, 2),
+                'sum_doc':    round(planned * unit_price, 2),
                 'sum_actual': round(actual * unit_price, 2),
-                'condition': mic.condition or '',
+                'condition':  mic.condition or '',
             })
     return items
 
