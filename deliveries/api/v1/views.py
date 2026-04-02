@@ -311,6 +311,9 @@ class ActOfArrivalViewSet(viewsets.ModelViewSet):
         try:
             arrival_pdf = generate_arrival_pdf(act, delivery)
             act.acceptance_pdf_path = arrival_pdf.relative_path
+            contract = delivery.id_contract
+            contract.file_path = arrival_pdf.relative_path
+            contract.save(update_fields=['file_path'])
         except Exception as exc:
             logger.error("Ошибка генерации PDF акта приемки #%s: %s", act.pk, exc, exc_info=True)
 

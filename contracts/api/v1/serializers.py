@@ -69,18 +69,29 @@ class ContractSerializer(serializers.ModelSerializer):
     file_download_url = serializers.SerializerMethodField()
     file_preview_url = serializers.SerializerMethodField()
     available_next_statuses = serializers.SerializerMethodField()
+    document_type = serializers.SerializerMethodField()
+    divergence_pdf_url = serializers.SerializerMethodField()
+    act_id = serializers.SerializerMethodField()
 
     class Meta:
         model = Contract
         fields = [
             'id_contract', 'status', 'created_at', 'file_path',
             'filename', 'file_download_url', 'file_preview_url',
-            'available_next_statuses', 'concluded_info'
+            'available_next_statuses', 'concluded_info',
+            'document_type', 'divergence_pdf_url', 'act_id',
         ]
         read_only_fields = [
             'id_contract', 'created_at', 'filename',
-            'file_download_url', 'file_preview_url', 'available_next_statuses'
+            'file_download_url', 'file_preview_url', 'available_next_statuses',
+            'document_type', 'divergence_pdf_url', 'act_id',
         ]
+
+    def _get_act(self, obj):
+        delivery = obj.delivery_set.select_related('id_act_of_arrival').first()
+        if delivery and delivery.id_act_of_arrival:
+            return delivery.id_act_of_arrival
+        return None
 
     def get_filename(self, obj):
         if not obj.file_path:
@@ -104,6 +115,35 @@ class ContractSerializer(serializers.ModelSerializer):
 
     def get_available_next_statuses(self, obj):
         return obj.get_available_next_statuses()
+
+    def get_act_id(self, obj):
+        try:
+            act = self._get_act(obj)
+            return act.id_act_of_arrival if act else None
+        except Exception:
+            return None
+
+    def get_document_type(self, obj):
+        try:
+            if obj.delivery_set.exists():
+                return 'act_of_arrival'
+        except Exception:
+            pass
+        return 'supply_contract'
+
+    def get_divergence_pdf_url(self, obj):
+        try:
+            act = self._get_act(obj)
+            if act and act.divergence_pdf_path:
+                from django.conf import settings
+                media_url = settings.MEDIA_URL.rstrip('/')
+                path = act.divergence_pdf_path.lstrip('/')
+                url = f'{media_url}/{path}'
+                request = self.context.get('request')
+                return request.build_absolute_uri(url) if request else url
+        except Exception:
+            pass
+        return None
 
 
 class SetContractStatusSerializer(serializers.Serializer):
