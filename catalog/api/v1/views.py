@@ -12,7 +12,7 @@ from warehousing.models import Inventory
 from users.permissions import HasAnyRole, ADMIN, DIRECTOR, MANAGER, ACCOUNTANT, STOREKEEPER
 
 _ALL_ROLES = (ADMIN, DIRECTOR, MANAGER, ACCOUNTANT, STOREKEEPER)
-_WRITE_ROLES = (ADMIN, MANAGER)
+_WRITE_ROLES = (ADMIN, MANAGER, DIRECTOR)
 
 
 class MaterialsViewSet(viewsets.ModelViewSet):
@@ -168,7 +168,7 @@ class PricesViewSet(viewsets.ModelViewSet):
     def get_permissions(self):
         if self.action in ('list', 'retrieve', 'filtered_by_date', 'best_offers', 'filtered_by_partners'):
             return [HasAnyRole(*_ALL_ROLES)()]
-        return [HasAnyRole(ADMIN, MANAGER, ACCOUNTANT)()]
+        return [HasAnyRole(ADMIN, MANAGER, ACCOUNTANT, DIRECTOR)()]
 
     def get_target_date(self, request):
         """Парсим дату из параметров ?date=YYYY-MM-DD

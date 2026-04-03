@@ -199,7 +199,7 @@ class ConcludedViewSet(ModelViewSet):
 
     def get_permissions(self):
         if self.action == 'pay':
-            return [HasAnyRole(ADMIN, ACCOUNTANT)()]
+            return [HasAnyRole(ADMIN, ACCOUNTANT, DIRECTOR, MANAGER)()]
         if self.action in ('create', 'update', 'partial_update', 'destroy'):
             return [HasAnyRole(ADMIN, MANAGER, DIRECTOR)()]
         return [HasAnyRole(ADMIN, DIRECTOR, MANAGER, ACCOUNTANT)()]
@@ -315,9 +315,9 @@ class ContractViewSet(ModelViewSet):
 
     def get_permissions(self):
         if self.action == 'set_status':
-            return [HasAnyRole(ADMIN, DIRECTOR)()]
+            return [HasAnyRole(ADMIN, DIRECTOR, MANAGER)()]
         if self.action in ('create', 'update', 'partial_update'):
-            return [HasAnyRole(ADMIN, MANAGER)()]
+            return [HasAnyRole(ADMIN, MANAGER, DIRECTOR)()]
         if self.action == 'destroy':
            return [HasAnyRole(ADMIN, DIRECTOR, MANAGER)()]
         return [HasAnyRole(ADMIN, DIRECTOR, MANAGER, ACCOUNTANT, STOREKEEPER)()]
