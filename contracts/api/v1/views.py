@@ -403,6 +403,22 @@ class ContractViewSet(ModelViewSet):
             'available_next_statuses': contract.get_available_next_statuses(),
         })
 
+    @action(detail=True, methods=['get'], url_path='download-waybill')
+    def download_waybill(self, request, pk=None):
+        contract = self.get_object()
+        if not contract.waybill_file_path:
+            return Response({'error': 'Накладная не найдена'}, status=status.HTTP_404_NOT_FOUND)
+        file_path = Path(settings.MEDIA_ROOT) / contract.waybill_file_path
+        if not file_path.exists():
+            return Response({'error': 'Файл не найден на сервере'}, status=status.HTTP_404_NOT_FOUND)
+        inline = request.query_params.get('inline', 'false').lower() == 'true'
+        return FileResponse(
+            open(file_path, 'rb'),
+            as_attachment=not inline,
+            filename=file_path.name,
+            content_type='application/pdf'
+        )
+
     @action(detail=True, methods=['get'])
     def materials_summary(self, request, pk=None):
         contract = self.get_object()

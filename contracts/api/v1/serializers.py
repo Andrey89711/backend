@@ -135,10 +135,7 @@ class ContractSerializer(serializers.ModelSerializer):
         try:
             act = self._get_act(obj)
             if act and act.acceptance_pdf_path:
-                from django.conf import settings
-                media_url = settings.MEDIA_URL.rstrip('/')
-                path = act.acceptance_pdf_path.lstrip('/')
-                url = f'{media_url}/{path}'
+                url = f'/api/deliveries/acts-of-arrival/{act.id_act_of_arrival}/download-acceptance/'
                 request = self.context.get('request')
                 return request.build_absolute_uri(url) if request else url
         except Exception:
@@ -149,10 +146,7 @@ class ContractSerializer(serializers.ModelSerializer):
         try:
             act = self._get_act(obj)
             if act and act.divergence_pdf_path:
-                from django.conf import settings
-                media_url = settings.MEDIA_URL.rstrip('/')
-                path = act.divergence_pdf_path.lstrip('/')
-                url = f'{media_url}/{path}'
+                url = f'/api/deliveries/acts-of-arrival/{act.id_act_of_arrival}/download-divergence/'
                 request = self.context.get('request')
                 return request.build_absolute_uri(url) if request else url
         except Exception:
@@ -165,10 +159,7 @@ class ContractSerializer(serializers.ModelSerializer):
     def get_waybill_pdf_url(self, obj):
         if not obj.waybill_file_path:
             return None
-        from django.conf import settings
-        media_url = settings.MEDIA_URL.rstrip('/')
-        path = obj.waybill_file_path.lstrip('/')
-        url = f'{media_url}/{path}'
+        url = f'/api/contracts/{obj.id_contract}/download-waybill/'
         request = self.context.get('request')
         return request.build_absolute_uri(url) if request else url
 

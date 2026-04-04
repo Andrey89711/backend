@@ -375,6 +375,36 @@ class ActOfArrivalViewSet(viewsets.ModelViewSet):
             'divergence_items_count': len(divergence_items),
         })
 
+    @action(detail=True, methods=['get'], url_path='download-acceptance')
+    def download_acceptance(self, request, pk=None):
+        from django.http import FileResponse
+        from pathlib import Path
+        from django.conf import settings
+        act = self.get_object()
+        if not act.acceptance_pdf_path:
+            return Response({'error': 'Файл акта приёма не найден'}, status=status.HTTP_404_NOT_FOUND)
+        file_path = Path(settings.MEDIA_ROOT) / act.acceptance_pdf_path
+        if not file_path.exists():
+            return Response({'error': 'Файл не найден на сервере'}, status=status.HTTP_404_NOT_FOUND)
+        inline = request.query_params.get('inline', 'false').lower() == 'true'
+        return FileResponse(open(file_path, 'rb'), as_attachment=not inline,
+                            filename=file_path.name, content_type='application/pdf')
+
+    @action(detail=True, methods=['get'], url_path='download-divergence')
+    def download_divergence(self, request, pk=None):
+        from django.http import FileResponse
+        from pathlib import Path
+        from django.conf import settings
+        act = self.get_object()
+        if not act.divergence_pdf_path:
+            return Response({'error': 'Файл акта расхождения не найден'}, status=status.HTTP_404_NOT_FOUND)
+        file_path = Path(settings.MEDIA_ROOT) / act.divergence_pdf_path
+        if not file_path.exists():
+            return Response({'error': 'Файл не найден на сервере'}, status=status.HTTP_404_NOT_FOUND)
+        inline = request.query_params.get('inline', 'false').lower() == 'true'
+        return FileResponse(open(file_path, 'rb'), as_attachment=not inline,
+                            filename=file_path.name, content_type='application/pdf')
+
     @action(detail=False, methods=['get'])
     def statistics(self, request):
         """Статистика по актам прибытия за период (фильтрация по дате доставки)."""
