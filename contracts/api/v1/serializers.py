@@ -72,6 +72,9 @@ class ContractSerializer(serializers.ModelSerializer):
     document_type = serializers.SerializerMethodField()
     divergence_pdf_url = serializers.SerializerMethodField()
     act_id = serializers.SerializerMethodField()
+    act_pdf_url = serializers.SerializerMethodField()
+    waybill_pdf_url = serializers.SerializerMethodField()
+    waybill_id = serializers.SerializerMethodField()
 
     class Meta:
         model = Contract
@@ -79,12 +82,14 @@ class ContractSerializer(serializers.ModelSerializer):
             'id_contract', 'status', 'created_at', 'file_path',
             'filename', 'file_download_url', 'file_preview_url',
             'available_next_statuses', 'concluded_info',
-            'document_type', 'divergence_pdf_url', 'act_id',
+            'document_type', 'divergence_pdf_url', 'act_id', 'act_pdf_url',
+            'waybill_pdf_url', 'waybill_id',
         ]
         read_only_fields = [
             'id_contract', 'created_at', 'filename',
             'file_download_url', 'file_preview_url', 'available_next_statuses',
-            'document_type', 'divergence_pdf_url', 'act_id',
+            'document_type', 'divergence_pdf_url', 'act_id', 'act_pdf_url',
+            'waybill_pdf_url', 'waybill_id',
         ]
 
     def _get_act(self, obj):
@@ -124,12 +129,21 @@ class ContractSerializer(serializers.ModelSerializer):
             return None
 
     def get_document_type(self, obj):
+        return 'supply_contract'
+
+    def get_act_pdf_url(self, obj):
         try:
-            if obj.delivery_set.exists():
-                return 'act_of_arrival'
+            act = self._get_act(obj)
+            if act and act.acceptance_pdf_path:
+                from django.conf import settings
+                media_url = settings.MEDIA_URL.rstrip('/')
+                path = act.acceptance_pdf_path.lstrip('/')
+                url = f'{media_url}/{path}'
+                request = self.context.get('request')
+                return request.build_absolute_uri(url) if request else url
         except Exception:
             pass
-        return 'supply_contract'
+        return None
 
     def get_divergence_pdf_url(self, obj):
         try:
@@ -144,6 +158,19 @@ class ContractSerializer(serializers.ModelSerializer):
         except Exception:
             pass
         return None
+
+    def get_waybill_id(self, obj):
+        return obj.id_contract if obj.waybill_file_path else None
+
+    def get_waybill_pdf_url(self, obj):
+        if not obj.waybill_file_path:
+            return None
+        from django.conf import settings
+        media_url = settings.MEDIA_URL.rstrip('/')
+        path = obj.waybill_file_path.lstrip('/')
+        url = f'{media_url}/{path}'
+        request = self.context.get('request')
+        return request.build_absolute_uri(url) if request else url
 
 
 class SetContractStatusSerializer(serializers.Serializer):
