@@ -37,6 +37,12 @@ class Contract(models.Model):
         blank=True,
         verbose_name='Путь к файлу'
     )
+    waybill_file_path = models.CharField(
+        max_length=500,
+        null=True,
+        blank=True,
+        verbose_name='Путь к накладной'
+    )
     status = models.CharField(
         max_length=20,
         choices=STATUS_CHOICES,

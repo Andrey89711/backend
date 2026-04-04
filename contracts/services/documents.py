@@ -369,3 +369,70 @@ def generate_divergence_pdf(act, delivery, divergence_items: list[dict]) -> Gene
         context=context,
         base_name=f'act_of_divergence_{act.id_act_of_arrival}',
     )
+
+
+def build_waybill_context(contract: Contract) -> dict:
+    from partners.models import Supplier as SupplierModel
+    from personnel.models import Director, Accountant, Manager
+
+    concluded = _best_concluded(contract)
+    rows = _contract_material_rows(contract)
+
+    supplier   = concluded.id_supplier   if concluded else None
+    director   = concluded.id_director   if concluded else None
+    accountant = concluded.id_accountant if concluded else None
+    manager    = concluded.id_manager    if concluded else None
+
+    today = timezone.now().date()
+    contract_date = _fmt_date(
+        concluded.conclusion_dates if concluded and concluded.conclusion_dates else today
+    )
+
+    total_without_vat = sum(round(r['unit_price'] / 1.2, 2) * r['qty'] for r in rows)
+    total_with_vat    = sum(r['unit_price'] * r['qty'] for r in rows)
+
+    items = [
+        {
+            'index':             idx + 1,
+            'name':              r['name'],
+            'unit':              r['unit'],
+            'quantity':          r['qty'],
+            'price_without_vat': round(r['unit_price'] / 1.2, 2),
+            'price_with_vat':    r['unit_price'],
+            'sum_without_vat':   round(round(r['unit_price'] / 1.2, 2) * r['qty'], 2),
+            'sum_with_vat':      round(r['unit_price'] * r['qty'], 2),
+        }
+        for idx, r in enumerate(rows)
+    ]
+
+    return {
+        'waybill_number':     contract.id_contract,
+        'contract_number':    contract.id_contract,
+        'contract_date':      contract_date,
+        'date':               _fmt_date(today),
+        'buyer_full_name':    'ПИЛОГРАМАРАМА',
+        'buyer_inn':          '—',
+        'buyer_basis':        'Устава',
+        'buyer_director':     _db_val(director.full_name   if director   else '', Director.objects.all(),   'full_name'),
+        'buyer_accountant':   _db_val(accountant.full_name if accountant else '', Accountant.objects.all(), 'full_name'),
+        'buyer_manager':      _db_val(manager.full_name    if manager    else '', Manager.objects.all(),    'full_name'),
+        'supplier_full_name': _db_val(supplier.name               if supplier else '', SupplierModel.objects.all(), 'name'),
+        'supplier_inn':       _db_val(supplier.tax_id             if supplier else '', SupplierModel.objects.all(), 'tax_id'),
+        'supplier_address':   _db_val(supplier.payment_details    if supplier else '', SupplierModel.objects.all(), 'payment_details'),
+        'supplier_director':  _db_val(supplier.director_full_name if supplier else '', SupplierModel.objects.all(), 'director_full_name'),
+        'supplier_basis':     'Устава',
+        'items':              items,
+        'total_without_vat':  round(total_without_vat, 2),
+        'total_with_vat':     round(total_with_vat, 2),
+        'total_amount':       round(total_with_vat, 2),
+        'total_amount_words': f'{round(total_with_vat, 2)} руб.',
+    }
+
+
+def generate_waybill_pdf(contract: Contract) -> GeneratedPdf:
+    context = build_waybill_context(contract)
+    return PdfDocumentService.generate_pdf(
+        template_name='waybill_template.docx',
+        context=context,
+        base_name=f'waybill_{contract.id_contract}',
+    )

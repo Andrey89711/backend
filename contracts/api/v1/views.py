@@ -19,7 +19,7 @@ from rest_framework_simplejwt.tokens import AccessToken
 from drf_spectacular.utils import extend_schema
 
 from contracts.models import Concluded, Contract, MaterialsInContract
-from contracts.services.documents import PdfDocumentService, generate_contract_pdf
+from contracts.services.documents import PdfDocumentService, generate_contract_pdf, generate_waybill_pdf
 from users.permissions import HasAnyRole, ADMIN, DIRECTOR, MANAGER, ACCOUNTANT, STOREKEEPER
 from contracts.services.pricing import (
     PriceResolutionError,
@@ -671,6 +671,34 @@ class ContractDocumentViewSet(viewsets.ViewSet):
             return response
         except Exception as e:
             logger.error(f"Ошибка генерации DOCX: {e}", exc_info=True)
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    @action(detail=False, methods=['post'], url_path='generate-waybill')
+    def generate_waybill(self, request):
+        contract_id = request.data.get('contract_id')
+        if not contract_id:
+            return Response({"error": "Параметр 'contract_id' обязателен"}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            contract = Contract.objects.get(id_contract=contract_id)
+        except Contract.DoesNotExist:
+            return Response({"error": "Договор не найден"}, status=status.HTTP_404_NOT_FOUND)
+
+        if not contract.materialsincontract_set.exists():
+            return Response({"error": "В договоре нет материалов"}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            generated = generate_waybill_pdf(contract)
+            contract.waybill_file_path = generated.relative_path
+            contract.save(update_fields=['waybill_file_path'])
+            return Response({
+                "status": "success",
+                "contract_id": contract.id_contract,
+                "filename": generated.filename,
+                "file_url": generated.file_url,
+            }, status=status.HTTP_201_CREATED)
+        except Exception as e:
+            logger.error(f"Ошибка генерации накладной: {e}", exc_info=True)
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     @action(detail=False, methods=['post'], url_path='generate-pdf')
