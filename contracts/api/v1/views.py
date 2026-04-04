@@ -202,7 +202,7 @@ class ConcludedViewSet(ModelViewSet):
             return [HasAnyRole(ADMIN, ACCOUNTANT, DIRECTOR, MANAGER)()]
         if self.action in ('create', 'update', 'partial_update', 'destroy'):
             return [HasAnyRole(ADMIN, MANAGER, DIRECTOR)()]
-        return [HasAnyRole(ADMIN, DIRECTOR, MANAGER, ACCOUNTANT)()]
+        return [HasAnyRole(ADMIN, DIRECTOR, MANAGER, ACCOUNTANT, STOREKEEPER)()]
 
     def perform_create(self, serializer):
         concluded = serializer.save()

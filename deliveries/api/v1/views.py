@@ -14,7 +14,7 @@ from deliveries.models import AcceptanceOfDelivery, ActOfArrival, Delivery
 from warehousing.models import Inventory, Works
 from users.permissions import HasAnyRole, ADMIN, STOREKEEPER, MANAGER, DIRECTOR, ACCOUNTANT
 
-_DELIVERY_ROLES = (ADMIN, STOREKEEPER, MANAGER, DIRECTOR)
+_DELIVERY_ROLES = (ADMIN, STOREKEEPER, MANAGER, DIRECTOR, ACCOUNTANT)
 from .serializers import (
     DeliverySerializer,
     ActOfArrivalSerializer,
