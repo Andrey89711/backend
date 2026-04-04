@@ -267,8 +267,8 @@ def build_arrival_context(act, delivery) -> dict:
         'items':              items,
         'total_amount':       round(total, 2),
         'total_amount_words': f'{round(total, 2)} руб.',
-        'act_number':         act.id_act_of_arrival,
-        'delivery_number':    delivery.id_delivery,
+        'act_number':         contract.id_contract,
+        'delivery_number':    contract.id_contract,
         'date':               _fmt_date(today),
     }
 
@@ -339,8 +339,8 @@ def build_divergence_context(act, delivery, divergence_items: list[dict]) -> dic
         'sign_date':            _fmt_date(today),
         'sign_name':            '—',
         'items':                divergence_items,
-        'act_number':           act.id_act_of_arrival,
-        'delivery_number':      delivery.id_delivery,
+        'act_number':           contract.id_contract,
+        'delivery_number':      contract.id_contract,
     }
 
 
