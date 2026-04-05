@@ -1,10 +1,22 @@
+from django.contrib.auth import get_user_model
 from rest_framework import viewsets
 from ...models import Director, Accountant, Manager, Storekeeper
 from .serializers import DirectorSerializer, AccountantSerializer, ManagerSerializer, StorekeeperSerializer
 from users.permissions import HasAnyRole, ADMIN, DIRECTOR, MANAGER, ACCOUNTANT, STOREKEEPER
 
+User = get_user_model()
+
 _READ_ROLES = (ADMIN, DIRECTOR, MANAGER, ACCOUNTANT, STOREKEEPER)
-_WRITE_ROLES = (ADMIN, DIRECTOR, MANAGER) 
+_WRITE_ROLES = (ADMIN, DIRECTOR, MANAGER)
+
+
+def _delete_linked_user(instance):
+    """Удаляет User, связанный с сотрудником по email."""
+    try:
+        User.objects.get(email=instance.contact_information).delete()
+    except User.DoesNotExist:
+        pass
+
 
 class DirectorViewSet(viewsets.ModelViewSet):
     queryset = Director.objects.all()
@@ -14,6 +26,10 @@ class DirectorViewSet(viewsets.ModelViewSet):
         if self.action in ('list', 'retrieve'):
             return [HasAnyRole(*_READ_ROLES)()]
         return [HasAnyRole(*_WRITE_ROLES)()]
+
+    def perform_destroy(self, instance):
+        _delete_linked_user(instance)
+        instance.delete()
 
 
 class AccountantViewSet(viewsets.ModelViewSet):
@@ -25,6 +41,10 @@ class AccountantViewSet(viewsets.ModelViewSet):
             return [HasAnyRole(*_READ_ROLES)()]
         return [HasAnyRole(*_WRITE_ROLES)()]
 
+    def perform_destroy(self, instance):
+        _delete_linked_user(instance)
+        instance.delete()
+
 
 class ManagerViewSet(viewsets.ModelViewSet):
     queryset = Manager.objects.all()
@@ -35,6 +55,10 @@ class ManagerViewSet(viewsets.ModelViewSet):
             return [HasAnyRole(*_READ_ROLES)()]
         return [HasAnyRole(*_WRITE_ROLES)()]
 
+    def perform_destroy(self, instance):
+        _delete_linked_user(instance)
+        instance.delete()
+
 
 class StorekeeperViewSet(viewsets.ModelViewSet):
     queryset = Storekeeper.objects.all()
@@ -44,3 +68,7 @@ class StorekeeperViewSet(viewsets.ModelViewSet):
         if self.action in ('list', 'retrieve'):
             return [HasAnyRole(*_READ_ROLES)()]
         return [HasAnyRole(*_WRITE_ROLES)()]
+
+    def perform_destroy(self, instance):
+        _delete_linked_user(instance)
+        instance.delete()
