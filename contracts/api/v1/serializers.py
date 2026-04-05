@@ -129,9 +129,16 @@ class ContractSerializer(serializers.ModelSerializer):
             return None
 
     def get_document_type(self, obj):
+        if obj.file_path:
+            path_lower = obj.file_path.lower()
+            if 'act_of_arrival' in path_lower:
+                return 'act_of_arrival'
+            if 'act_of_divergence' in path_lower:
+                return 'act_of_divergence'
         return 'supply_contract'
 
     def get_act_pdf_url(self, obj):
+        # Delivery flow: act confirmed via MainActions
         try:
             act = self._get_act(obj)
             if act and act.acceptance_pdf_path:
@@ -143,9 +150,15 @@ class ContractSerializer(serializers.ModelSerializer):
                 return request.build_absolute_uri(url) if request else url
         except Exception:
             pass
+        # Standalone flow: act saved via AgreementFormPage → file_path contains act
+        if obj.file_path and 'act_of_arrival' in obj.file_path.lower():
+            request = self.context.get('request')
+            url = f'/api/contracts/{obj.id_contract}/file/download/'
+            return request.build_absolute_uri(url) if request else url
         return None
 
     def get_divergence_pdf_url(self, obj):
+        # Delivery flow
         try:
             act = self._get_act(obj)
             if act and act.divergence_pdf_path:
@@ -157,6 +170,11 @@ class ContractSerializer(serializers.ModelSerializer):
                 return request.build_absolute_uri(url) if request else url
         except Exception:
             pass
+        # Standalone flow
+        if obj.file_path and 'act_of_divergence' in obj.file_path.lower():
+            request = self.context.get('request')
+            url = f'/api/contracts/{obj.id_contract}/file/download/'
+            return request.build_absolute_uri(url) if request else url
         return None
 
     def get_waybill_id(self, obj):
