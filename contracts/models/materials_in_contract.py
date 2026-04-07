@@ -35,7 +35,6 @@ class MaterialsInContract(models.Model):
         db_table = 'materials_in_contract'
         verbose_name = 'Материал в договоре'
         verbose_name_plural = 'Материалы в договоре'
-        unique_together = [['id_materials', 'id_contract']]
 
     def __str__(self):
         return f"Материал {self.id_materials} в договоре #{self.id_contract}"
