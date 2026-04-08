@@ -11,7 +11,7 @@ class MaterialsInContractSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'id_materials', 'material_name', 'unit', 'id_contract',
             'materials_quality_in_contract', 'unit_price',
-            'actual_quantity', 'condition',
+            'actual_quantity', 'condition', 'delivery_date',
         ]
 
     def validate_unit_price(self, value):

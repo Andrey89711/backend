@@ -14,6 +14,10 @@ class MaterialsInContract(models.Model):
         null=True, blank=True,
         verbose_name='Фактическое количество'
     )
+    delivery_date = models.DateField(
+        null=True, blank=True,
+        verbose_name='Дата поставки'
+    )
     unit_price = models.FloatField(
         null=True, blank=True,
         verbose_name='Цена за единицу'
